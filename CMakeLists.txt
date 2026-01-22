@@ -227,7 +227,7 @@ if(HFT_BUILD_BENCHMARKS)
     )
 
     target_compile_options(hft_benchmarks PRIVATE
-        ${HFT_OPTIMIZATION_FLAGS}
+        $<$<CONFIG:Release>:${HFT_OPTIMIZATION_FLAGS}>
         ${HFT_WARNING_FLAGS}
     )
 endif()
