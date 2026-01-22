@@ -22,7 +22,11 @@
 #include <thread>
 
 #if defined(__x86_64__) || defined(_M_X64)
-    #include <x86intrin.h>
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+    #else
+        #include <x86intrin.h>
+    #endif
     #define HFT_HAS_RDTSC 1
 #elif defined(__aarch64__) || defined(_M_ARM64)
     #define HFT_HAS_RDTSC 0

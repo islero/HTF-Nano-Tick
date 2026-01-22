@@ -11,6 +11,7 @@
 
 #include <thread>
 #include <atomic>
+#include <chrono>
 
 using namespace hft;
 
