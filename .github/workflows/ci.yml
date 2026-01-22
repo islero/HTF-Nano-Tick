@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-linux:
+    name: Linux (${{ matrix.compiler }}, ${{ matrix.build_type }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc-12, gcc-13, clang-15, clang-16]
+        build_type: [Debug, Release]
+        include:
+          - compiler: gcc-12
+            cc: gcc-12
+            cxx: g++-12
+          - compiler: gcc-13
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang-15
+            cc: clang-15
+            cxx: clang++-15
+          - compiler: clang-16
+            cc: clang-16
+            cxx: clang++-16
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install compiler
+      run: |
+        sudo apt-get update
+        if [[ "${{ matrix.compiler }}" == gcc-* ]]; then
+          sudo apt-get install -y ${{ matrix.cc }} ${{ matrix.cxx }}
+        else
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $(echo ${{ matrix.compiler }} | sed 's/clang-//')
+        fi
+
+    - name: Configure CMake
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DHFT_BUILD_TESTS=ON \
+          -DHFT_BUILD_BENCHMARKS=ON \
+          -DHFT_NATIVE_ARCH=OFF
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(nproc)
+
+    - name: Run tests
+      working-directory: build
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+
+  build-macos:
+    name: macOS (${{ matrix.build_type }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DHFT_BUILD_TESTS=ON \
+          -DHFT_BUILD_BENCHMARKS=ON \
+          -DHFT_NATIVE_ARCH=OFF
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j$(sysctl -n hw.ncpu)
+
+    - name: Run tests
+      working-directory: build
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+
+  build-windows:
+    name: Windows (MSVC, ${{ matrix.build_type }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        cmake -B build `
+          -DHFT_BUILD_TESTS=ON `
+          -DHFT_BUILD_BENCHMARKS=ON `
+          -DHFT_NATIVE_ARCH=OFF
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }} -j $env:NUMBER_OF_PROCESSORS
+
+    - name: Run tests
+      working-directory: build
+      run: ctest -C ${{ matrix.build_type }} --output-on-failure --verbose
+
+  sanitizers:
+    name: Sanitizers (ASan + UBSan)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Clang
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-16
+
+    - name: Configure CMake with Sanitizers
+      env:
+        CC: clang-16
+        CXX: clang++-16
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DHFT_BUILD_TESTS=ON \
+          -DHFT_BUILD_BENCHMARKS=OFF \
+          -DHFT_ENABLE_SANITIZERS=ON \
+          -DHFT_NATIVE_ARCH=OFF
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run tests with Sanitizers
+      working-directory: build
+      env:
+        ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+        UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      run: ctest --output-on-failure --verbose
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format-16 cppcheck
+
+    - name: Check formatting
+      run: |
+        find include src tests benchmarks -name '*.cpp' -o -name '*.hpp' | \
+          xargs clang-format-16 --dry-run --Werror || \
+          echo "::warning::Code formatting issues detected. Run clang-format to fix."
+
+    - name: Static analysis with cppcheck
+      run: |
+        cppcheck --enable=warning,performance,portability \
+          --suppress=missingIncludeSystem \
+          --error-exitcode=1 \
+          --inline-suppr \
+          -I include \
+          src tests benchmarks 2>&1 || \
+          echo "::warning::Static analysis warnings detected."
