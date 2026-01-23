@@ -1,9 +1,24 @@
 # HFT NanoTick
 
+[![CI](https://github.com/islero/HTF-Nano-Tick/actions/workflows/ci.yml/badge.svg)](https://github.com/islero/HTF-Nano-Tick/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
+
 A high-frequency trading (HFT) system skeleton implemented in modern C++20, designed to demonstrate production-grade low-latency architecture patterns. This project implements a **Spot-Futures Cash and Carry Arbitrage Strategy** with emphasis on zero-allocation hot paths, lock-free data structures, and compile-time optimizations.
+
+## Highlights
+
+- **Sub-microsecond latency**: Tick-to-trade target < 1μs
+- **Zero-allocation hot path**: Pre-allocated pools, arenas, and stack allocation
+- **Lock-free concurrency**: SPSC queues with wait-free guarantees
+- **Compile-time optimization**: CRTP eliminates virtual dispatch overhead
+- **Cross-platform**: Tested on Linux (GCC/Clang), macOS, and Windows (MSVC)
+- **Production patterns**: Cache-line alignment, false sharing prevention, RDTSC timing
 
 ## Table of Contents
 
+- [Highlights](#highlights)
 - [Architecture Overview](#architecture-overview)
 - [Project Structure](#project-structure)
 - [Design Philosophy](#design-philosophy)
