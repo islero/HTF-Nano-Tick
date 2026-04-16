@@ -16,18 +16,22 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 using namespace hft;
 
 TEST(PublicHeadersTest, HeadersCompileAndCoreTypesInstantiate) {
-    DefaultOrderBook book(1);
-    DefaultMarketDataHandler handler;
-    DefaultOrderGateway gateway;
+    // Default aliases own large fixed-capacity buffers; keep them off the test
+    // thread stack for Windows CI's smaller default stack.
+    auto book = std::make_unique<DefaultOrderBook>(1);
+    auto handler = std::make_unique<DefaultMarketDataHandler>();
+    auto gateway = std::make_unique<DefaultOrderGateway>();
     SPSCQueue<int, 8> queue;
     LinearArena<1024> arena;
 
-    EXPECT_TRUE(book.empty());
-    EXPECT_EQ(handler.queueDepth(), 0u);
-    EXPECT_EQ(gateway.openOrderCount(), 0u);
+    EXPECT_TRUE(book->empty());
+    EXPECT_EQ(handler->queueDepth(), 0u);
+    EXPECT_EQ(gateway->openOrderCount(), 0u);
     EXPECT_TRUE(queue.empty());
     EXPECT_EQ(arena.used(), 0u);
 }
