@@ -239,6 +239,30 @@ TEST_F(OrderBookTest, RejectInvalidOrderId) {
     EXPECT_TRUE(book->empty());
 }
 
+TEST(OrderBookCapacityTest, RejectWhenMaxOrdersReached) {
+    OrderBook<8, 3> smallBook(1);
+
+    EXPECT_TRUE(smallBook.addOrder(1, Side::Buy, priceFromDouble(100.00), 10));
+    EXPECT_TRUE(smallBook.addOrder(2, Side::Buy, priceFromDouble(100.01), 10));
+    EXPECT_TRUE(smallBook.addOrder(3, Side::Sell, priceFromDouble(100.02), 10));
+    EXPECT_FALSE(smallBook.addOrder(4, Side::Sell, priceFromDouble(100.03), 10));
+    EXPECT_EQ(smallBook.orderCount(), 3u);
+}
+
+TEST(OrderBookCapacityTest, RejectWhenMaxLevelsReachedAndReuseReleasedSlot) {
+    OrderBook<2, 4> smallBook(1);
+
+    EXPECT_TRUE(smallBook.addOrder(1, Side::Buy, priceFromDouble(100.00), 10));
+    EXPECT_TRUE(smallBook.addOrder(2, Side::Buy, priceFromDouble(99.99), 10));
+    EXPECT_FALSE(smallBook.addOrder(3, Side::Buy, priceFromDouble(99.98), 10));
+
+    EXPECT_EQ(smallBook.orderCount(), 2u);
+    EXPECT_TRUE(smallBook.deleteOrder(2));
+    EXPECT_TRUE(smallBook.addOrder(4, Side::Buy, priceFromDouble(99.98), 10));
+    EXPECT_EQ(smallBook.orderCount(), 2u);
+    EXPECT_EQ(smallBook.levelCount(Side::Buy), 2u);
+}
+
 //==============================================================================
 // Snapshot
 //==============================================================================

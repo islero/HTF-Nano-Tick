@@ -1,17 +1,11 @@
 /**
  * @file OrderBook.hpp
- * @brief High-performance Limit Order Book implementation.
+ * @brief Bounded limit order book with preallocated hot-path storage.
  *
- * Provides a cache-efficient limit order book optimized for HFT:
- * - O(1) access to best bid/ask
- * - O(log N) insert/modify/delete operations
- * - Zero allocation on hot path (uses object pools)
- * - Template-based design for compile-time optimization
- *
- * Architecture:
- * - Price levels stored in sorted containers (one for bids, one for asks)
- * - Each price level maintains a queue of orders (FIFO)
- * - Direct order ID lookup via hash map for fast cancel/modify
+ * The book keeps all orders and price levels inside fixed-size arrays sized by
+ * template parameters. Add/modify/delete do not allocate memory after
+ * construction. Order lookup uses an open-addressed index and price levels are
+ * kept in sorted bounded arrays.
  *
  * @author HFT NanoTick Team
  * @copyright MIT License
@@ -21,16 +15,36 @@
 #define HFT_NANOTICK_ORDER_BOOK_HPP
 
 #include "../core/Types.hpp"
-#include "../core/MemoryArena.hpp"
 #include "../core/Timestamp.hpp"
 
-#include <map>
-#include <unordered_map>
-#include <vector>
-#include <functional>
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <utility>
+#include <vector>
 
 namespace hft {
+
+namespace detail {
+
+[[nodiscard]] constexpr std::size_t nextPowerOfTwo(std::size_t value) noexcept {
+    std::size_t result = 1;
+    while (result < value) {
+        result <<= 1U;
+    }
+    return result;
+}
+
+[[nodiscard]] constexpr std::uint64_t mixOrderId(OrderId id) noexcept {
+    std::uint64_t x = id + 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30U)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27U)) * 0x94d049bb133111ebULL;
+    return x ^ (x >> 31U);
+}
+
+} // namespace detail
 
 //==============================================================================
 // Order Entry
@@ -38,9 +52,6 @@ namespace hft {
 
 /**
  * @brief Single order entry in the order book.
- *
- * Represents a limit order at a specific price level. Cache-line
- * aligned to prevent false sharing when orders are modified.
  */
 struct alignas(CACHE_LINE_SIZE) Order {
     OrderId   orderId;        ///< Unique order identifier
@@ -75,21 +86,18 @@ struct alignas(CACHE_LINE_SIZE) Order {
 //==============================================================================
 
 /**
- * @brief Represents a single price level with aggregated quantity.
- *
- * Maintains total quantity at a price and references to individual orders.
- * Orders are stored in FIFO order for price-time priority matching.
+ * @brief Aggregated state for one price level.
  */
 struct PriceLevel {
     Price    price{INVALID_PRICE};    ///< Price at this level
     Quantity totalQty{0};             ///< Total quantity at this level
-    std::vector<OrderId> orders;      ///< Order IDs at this level (FIFO)
+    std::size_t orders{0};            ///< Number of FIFO orders at this level
 
     constexpr PriceLevel() noexcept = default;
-    explicit PriceLevel(Price p) noexcept : price(p) {}
+    explicit constexpr PriceLevel(Price p) noexcept : price(p) {}
 
-    [[nodiscard]] bool empty() const noexcept { return orders.empty(); }
-    [[nodiscard]] std::size_t orderCount() const noexcept { return orders.size(); }
+    [[nodiscard]] constexpr bool empty() const noexcept { return orders == 0; }
+    [[nodiscard]] constexpr std::size_t orderCount() const noexcept { return orders; }
 };
 
 //==============================================================================
@@ -100,13 +108,13 @@ struct PriceLevel {
  * @brief Event emitted when order book state changes.
  */
 struct OrderBookUpdate {
-    MdMsgType  action;         ///< Add, Modify, Delete, Trade
-    Side       side;           ///< Affected side
-    Price      price;          ///< Affected price level
-    Quantity   quantity;       ///< New/changed quantity
-    Quantity   totalQtyAtLevel;///< Total quantity at price level after update
-    OrderId    orderId;        ///< Related order ID
-    Timestamp  timestamp;      ///< Event timestamp
+    MdMsgType  action;          ///< Add, Modify, Delete, Trade
+    Side       side;            ///< Affected side
+    Price      price;           ///< Affected price level
+    Quantity   quantity;        ///< New/changed quantity
+    Quantity   totalQtyAtLevel; ///< Total quantity at price level after update
+    OrderId    orderId;         ///< Related order ID
+    Timestamp  timestamp;       ///< Event timestamp
 };
 
 //==============================================================================
@@ -114,37 +122,28 @@ struct OrderBookUpdate {
 //==============================================================================
 
 /**
- * @brief High-performance templated limit order book.
+ * @brief Bounded, allocation-free limit order book.
  *
- * Template parameters allow customization of:
- * - Maximum price levels to track
- * - Maximum orders per price level
- * - Custom comparators for price ordering
- *
- * @tparam MaxLevels Maximum depth of book to maintain per side.
- * @tparam MaxOrders Maximum total orders in the book.
+ * @tparam MaxLevels Maximum price levels to maintain per side.
+ * @tparam MaxOrders Maximum total live orders in the book.
  */
 template <std::size_t MaxLevels = 100, std::size_t MaxOrders = 10000>
 class OrderBook {
 public:
-    /// Callback type for order book updates
+    static_assert(MaxLevels > 0, "MaxLevels must be greater than zero");
+    static_assert(MaxOrders > 0, "MaxOrders must be greater than zero");
+
+    /// Callback type for order book updates. Install outside the hot path.
     using UpdateCallback = std::function<void(const OrderBookUpdate&)>;
 
-    /**
-     * @brief Construct an order book for a symbol.
-     * @param symbolId Symbol identifier.
-     */
     explicit OrderBook(SymbolId symbolId = 0) noexcept
         : m_symbolId(symbolId)
     {
-        m_orders.reserve(MaxOrders);
+        resetStorage();
     }
 
-    // Non-copyable for safety (contains callbacks)
     OrderBook(const OrderBook&) = delete;
     OrderBook& operator=(const OrderBook&) = delete;
-
-    // Movable
     OrderBook(OrderBook&&) noexcept = default;
     OrderBook& operator=(OrderBook&&) noexcept = default;
 
@@ -152,135 +151,115 @@ public:
     // Order Operations
     //==========================================================================
 
-    /**
-     * @brief Add a new order to the book.
-     *
-     * @param orderId Unique order identifier.
-     * @param side Buy or Sell.
-     * @param price Limit price.
-     * @param quantity Order quantity.
-     * @return true if order was added successfully.
-     */
     [[nodiscard]] bool addOrder(OrderId orderId, Side side, Price price, Quantity quantity) noexcept {
         if (orderId == INVALID_ORDER_ID || price == INVALID_PRICE || quantity <= 0) [[unlikely]] {
             return false;
         }
 
-        // Check if order already exists
-        if (m_orders.contains(orderId)) [[unlikely]] {
+        if (findOrderSlot(orderId) != INVALID_INDEX) [[unlikely]] {
             return false;
         }
 
-        // Create order
-        Order order(orderId, price, quantity, side, nowNanos());
-        m_orders.emplace(orderId, order);
-
-        // Add to appropriate price level
-        auto& levels = (side == Side::Buy) ? m_bids : m_asks;
-        auto& level = levels[price];
-        level.price = price;
-        level.totalQty += quantity;
-        level.orders.push_back(orderId);
-
-        // Update BBO if needed
-        if (side == Side::Buy) {
-            if (price > m_bestBid) m_bestBid = price;
-        } else {
-            if (m_bestAsk == INVALID_PRICE || price < m_bestAsk) m_bestAsk = price;
+        const std::size_t slotIndex = allocateOrderSlot();
+        if (slotIndex == INVALID_INDEX) [[unlikely]] {
+            return false;
         }
 
-        // Emit update
-        emitUpdate(MdMsgType::Add, side, price, quantity, level.totalQty, orderId);
+        std::size_t levelIndex = findOrInsertLevel(side, price);
+        if (levelIndex == INVALID_INDEX) [[unlikely]] {
+            releaseOrderSlot(slotIndex);
+            return false;
+        }
+
+        OrderSlot& slot = m_orderSlots[slotIndex];
+        slot.order = Order(orderId, price, quantity, side, nowNanos());
+        slot.levelIndex = levelIndex;
+        slot.next = INVALID_INDEX;
+        slot.prev = INVALID_INDEX;
+        slot.active = true;
+
+        LevelSlot& level = levelSlot(side, levelIndex);
+        appendOrderToLevel(level, slotIndex);
+        level.level.totalQty += quantity;
+        ++level.level.orders;
+
+        if (!insertOrderIndex(orderId, slotIndex)) [[unlikely]] {
+            unlinkOrderFromLevel(level, slotIndex);
+            level.level.totalQty -= quantity;
+            --level.level.orders;
+            removeLevelIfEmpty(side, levelIndex);
+            releaseOrderSlot(slotIndex);
+            return false;
+        }
+
+        ++m_orderCount;
+        updateBBO(side);
+        emitUpdate(MdMsgType::Add, side, price, quantity, level.level.totalQty, orderId);
 
         return true;
     }
 
-    /**
-     * @brief Modify an existing order.
-     *
-     * @param orderId Order to modify.
-     * @param newQuantity New quantity (price cannot change).
-     * @return true if order was modified successfully.
-     */
     [[nodiscard]] bool modifyOrder(OrderId orderId, Quantity newQuantity) noexcept {
-        auto it = m_orders.find(orderId);
-        if (it == m_orders.end()) [[unlikely]] {
-            return false;
-        }
-
-        Order& order = it->second;
-        Quantity delta = newQuantity - order.quantity;
-
-        auto& levels = (order.side == Side::Buy) ? m_bids : m_asks;
-        auto levelIt = levels.find(order.price);
-        if (levelIt == levels.end()) [[unlikely]] {
-            return false;
-        }
-
-        order.quantity = newQuantity;
-        levelIt->second.totalQty += delta;
-
-        // Handle zero quantity as delete
         if (newQuantity <= 0) {
             return deleteOrder(orderId);
         }
 
-        emitUpdate(MdMsgType::Modify, order.side, order.price, newQuantity,
-                   levelIt->second.totalQty, orderId);
-
-        return true;
-    }
-
-    /**
-     * @brief Delete an order from the book.
-     *
-     * @param orderId Order to delete.
-     * @return true if order was deleted successfully.
-     */
-    [[nodiscard]] bool deleteOrder(OrderId orderId) noexcept {
-        auto it = m_orders.find(orderId);
-        if (it == m_orders.end()) [[unlikely]] {
+        const std::size_t slotIndex = findOrderSlot(orderId);
+        if (slotIndex == INVALID_INDEX) [[unlikely]] {
             return false;
         }
 
-        const Order& order = it->second;
-        auto& levels = (order.side == Side::Buy) ? m_bids : m_asks;
-        auto levelIt = levels.find(order.price);
+        OrderSlot& slot = m_orderSlots[slotIndex];
+        Order& order = slot.order;
+        LevelSlot& level = levelSlot(order.side, slot.levelIndex);
 
-        if (levelIt != levels.end()) {
-            PriceLevel& level = levelIt->second;
-            level.totalQty -= order.quantity;
+        const Quantity delta = newQuantity - order.quantity;
+        order.quantity = newQuantity;
+        level.level.totalQty += delta;
 
-            // Remove order from level
-            auto& orders = level.orders;
-            orders.erase(std::remove(orders.begin(), orders.end(), orderId), orders.end());
+        emitUpdate(MdMsgType::Modify, order.side, order.price, newQuantity,
+                   level.level.totalQty, orderId);
 
-            Quantity remainingQty = level.totalQty;
-
-            // Remove empty price level
-            if (level.empty()) {
-                levels.erase(levelIt);
-
-                // Update BBO
-                updateBBO(order.side);
-            }
-
-            emitUpdate(MdMsgType::Delete, order.side, order.price, 0,
-                       remainingQty, orderId);
-        }
-
-        m_orders.erase(it);
         return true;
     }
 
-    /**
-     * @brief Apply a snapshot to reset book state.
-     *
-     * Clears existing state and rebuilds from snapshot data.
-     *
-     * @param bids Bid levels (price, quantity pairs).
-     * @param asks Ask levels (price, quantity pairs).
-     */
+    [[nodiscard]] bool deleteOrder(OrderId orderId) noexcept {
+        const std::size_t slotIndex = findOrderSlot(orderId);
+        if (slotIndex == INVALID_INDEX) [[unlikely]] {
+            return false;
+        }
+
+        OrderSlot& slot = m_orderSlots[slotIndex];
+        const Side side = slot.order.side;
+        const Price price = slot.order.price;
+        const Quantity quantity = slot.order.quantity;
+        const std::size_t levelIndex = slot.levelIndex;
+
+        LevelSlot& level = levelSlot(side, levelIndex);
+        if (level.level.totalQty >= quantity) {
+            level.level.totalQty -= quantity;
+        } else {
+            level.level.totalQty = 0;
+        }
+
+        unlinkOrderFromLevel(level, slotIndex);
+        if (level.level.orders > 0) {
+            --level.level.orders;
+        }
+        const Quantity remainingQty = level.level.totalQty;
+
+        eraseOrderIndex(orderId);
+        releaseOrderSlot(slotIndex);
+        --m_orderCount;
+
+        removeLevelIfEmpty(side, levelIndex);
+        updateBBO(side);
+
+        emitUpdate(MdMsgType::Delete, side, price, 0, remainingQty, orderId);
+
+        return true;
+    }
+
     void applySnapshot(const std::vector<std::pair<Price, Quantity>>& bids,
                        const std::vector<std::pair<Price, Quantity>>& asks) noexcept {
         clear();
@@ -298,57 +277,25 @@ public:
         emitUpdate(MdMsgType::Snapshot, Side::Buy, m_bestBid, 0, 0, 0);
     }
 
-    /**
-     * @brief Clear all orders from the book.
-     */
     void clear() noexcept {
-        m_bids.clear();
-        m_asks.clear();
-        m_orders.clear();
-        m_bestBid = INVALID_PRICE;
-        m_bestAsk = INVALID_PRICE;
+        resetStorage();
     }
 
     //==========================================================================
     // Book Queries
     //==========================================================================
 
-    /**
-     * @brief Get best bid price.
-     * @return Best bid price or INVALID_PRICE if no bids.
-     */
     [[nodiscard]] Price bestBid() const noexcept { return m_bestBid; }
-
-    /**
-     * @brief Get best ask price.
-     * @return Best ask price or INVALID_PRICE if no asks.
-     */
     [[nodiscard]] Price bestAsk() const noexcept { return m_bestAsk; }
 
-    /**
-     * @brief Get quantity at best bid.
-     * @return Quantity at best bid or 0.
-     */
     [[nodiscard]] Quantity bestBidQty() const noexcept {
-        if (m_bestBid == INVALID_PRICE) return 0;
-        auto it = m_bids.find(m_bestBid);
-        return (it != m_bids.end()) ? it->second.totalQty : 0;
+        return m_bidLevelCount == 0 ? 0 : m_bidLevels[0].level.totalQty;
     }
 
-    /**
-     * @brief Get quantity at best ask.
-     * @return Quantity at best ask or 0.
-     */
     [[nodiscard]] Quantity bestAskQty() const noexcept {
-        if (m_bestAsk == INVALID_PRICE) return 0;
-        auto it = m_asks.find(m_bestAsk);
-        return (it != m_asks.end()) ? it->second.totalQty : 0;
+        return m_askLevelCount == 0 ? 0 : m_askLevels[0].level.totalQty;
     }
 
-    /**
-     * @brief Get mid price.
-     * @return Mid price or INVALID_PRICE if book is empty.
-     */
     [[nodiscard]] Price midPrice() const noexcept {
         if (m_bestBid == INVALID_PRICE || m_bestAsk == INVALID_PRICE) {
             return INVALID_PRICE;
@@ -356,10 +303,6 @@ public:
         return (m_bestBid + m_bestAsk) / 2;
     }
 
-    /**
-     * @brief Get spread in price units.
-     * @return Spread or INVALID_PRICE if book is empty.
-     */
     [[nodiscard]] Price spread() const noexcept {
         if (m_bestBid == INVALID_PRICE || m_bestAsk == INVALID_PRICE) {
             return INVALID_PRICE;
@@ -367,10 +310,6 @@ public:
         return m_bestAsk - m_bestBid;
     }
 
-    /**
-     * @brief Check if book is crossed (bid >= ask).
-     * @return true if crossed.
-     */
     [[nodiscard]] bool isCrossed() const noexcept {
         if (m_bestBid == INVALID_PRICE || m_bestAsk == INVALID_PRICE) {
             return false;
@@ -378,79 +317,39 @@ public:
         return m_bestBid >= m_bestAsk;
     }
 
-    /**
-     * @brief Get total quantity at a price level.
-     *
-     * @param side Book side.
-     * @param price Price level.
-     * @return Total quantity at that level.
-     */
     [[nodiscard]] Quantity quantityAtPrice(Side side, Price price) const noexcept {
-        const auto& levels = (side == Side::Buy) ? m_bids : m_asks;
-        auto it = levels.find(price);
-        return (it != levels.end()) ? it->second.totalQty : 0;
+        const std::size_t index = findLevel(side, price);
+        return index == INVALID_INDEX ? 0 : levelSlot(side, index).level.totalQty;
     }
 
-    /**
-     * @brief Get an order by ID.
-     *
-     * @param orderId Order ID.
-     * @return Pointer to order or nullptr if not found.
-     */
     [[nodiscard]] const Order* getOrder(OrderId orderId) const noexcept {
-        auto it = m_orders.find(orderId);
-        return (it != m_orders.end()) ? &it->second : nullptr;
+        const std::size_t slotIndex = findOrderSlot(orderId);
+        return slotIndex == INVALID_INDEX ? nullptr : &m_orderSlots[slotIndex].order;
     }
 
-    /**
-     * @brief Get number of price levels on a side.
-     * @param side Book side.
-     * @return Number of price levels.
-     */
     [[nodiscard]] std::size_t levelCount(Side side) const noexcept {
-        return (side == Side::Buy) ? m_bids.size() : m_asks.size();
+        return side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
     }
 
-    /**
-     * @brief Get total number of orders in book.
-     * @return Order count.
-     */
     [[nodiscard]] std::size_t orderCount() const noexcept {
-        return m_orders.size();
+        return m_orderCount;
     }
 
-    /**
-     * @brief Check if book is empty.
-     * @return true if no orders.
-     */
     [[nodiscard]] bool empty() const noexcept {
-        return m_orders.empty();
+        return m_orderCount == 0;
     }
 
-    /**
-     * @brief Get top N price levels for a side.
-     *
-     * @param side Book side.
-     * @param depth Number of levels to retrieve.
-     * @param[out] levels Output vector of (price, quantity) pairs.
-     */
     void getTopLevels(Side side, std::size_t depth,
                       std::vector<std::pair<Price, Quantity>>& levels) const {
         levels.clear();
         levels.reserve(depth);
 
-        const auto& book = (side == Side::Buy) ? m_bids : m_asks;
+        const auto& sideLevels = side == Side::Buy ? m_bidLevels : m_askLevels;
+        const std::size_t count = side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
+        const std::size_t outputCount = std::min(depth, count);
 
-        if (side == Side::Buy) {
-            // Bids: highest price first
-            for (auto it = book.rbegin(); it != book.rend() && levels.size() < depth; ++it) {
-                levels.emplace_back(it->first, it->second.totalQty);
-            }
-        } else {
-            // Asks: lowest price first
-            for (auto it = book.begin(); it != book.end() && levels.size() < depth; ++it) {
-                levels.emplace_back(it->first, it->second.totalQty);
-            }
+        for (std::size_t i = 0; i < outputCount; ++i) {
+            levels.emplace_back(sideLevels[i].level.price, sideLevels[i].level.totalQty);
         }
     }
 
@@ -458,34 +357,280 @@ public:
     // Callbacks
     //==========================================================================
 
-    /**
-     * @brief Register callback for order book updates.
-     * @param callback Function to call on each update.
-     */
     void setUpdateCallback(UpdateCallback callback) noexcept {
         m_updateCallback = std::move(callback);
     }
 
-    /**
-     * @brief Get symbol ID.
-     * @return Symbol identifier.
-     */
     [[nodiscard]] SymbolId symbolId() const noexcept { return m_symbolId; }
+    [[nodiscard]] static constexpr std::size_t maxLevels() noexcept { return MaxLevels; }
+    [[nodiscard]] static constexpr std::size_t maxOrders() noexcept { return MaxOrders; }
 
 private:
-    void updateBBO(Side side) noexcept {
+    static constexpr std::size_t INVALID_INDEX = std::numeric_limits<std::size_t>::max();
+    static constexpr std::size_t ORDER_INDEX_CAPACITY = detail::nextPowerOfTwo(MaxOrders * 2U);
+    static constexpr std::uint8_t INDEX_EMPTY = 0;
+    static constexpr std::uint8_t INDEX_OCCUPIED = 1;
+    static constexpr std::uint8_t INDEX_DELETED = 2;
+
+    struct LevelSlot {
+        PriceLevel level{};
+        std::size_t firstOrderSlot{INVALID_INDEX};
+        std::size_t lastOrderSlot{INVALID_INDEX};
+        bool active{false};
+    };
+
+    struct OrderSlot {
+        Order order{};
+        std::size_t next{INVALID_INDEX};
+        std::size_t prev{INVALID_INDEX};
+        std::size_t levelIndex{INVALID_INDEX};
+        bool active{false};
+    };
+
+    struct OrderIndexEntry {
+        OrderId orderId{INVALID_ORDER_ID};
+        std::size_t slotIndex{INVALID_INDEX};
+        std::uint8_t state{INDEX_EMPTY};
+    };
+
+    void resetStorage() noexcept {
+        m_bidLevelCount = 0;
+        m_askLevelCount = 0;
+        m_orderCount = 0;
+        m_bestBid = INVALID_PRICE;
+        m_bestAsk = INVALID_PRICE;
+
+        m_freeOrderCount = MaxOrders;
+        for (std::size_t i = 0; i < MaxOrders; ++i) {
+            m_freeOrderSlots[i] = MaxOrders - 1U - i;
+            m_orderSlots[i] = OrderSlot{};
+        }
+
+        for (auto& level : m_bidLevels) {
+            level = LevelSlot{};
+        }
+        for (auto& level : m_askLevels) {
+            level = LevelSlot{};
+        }
+        for (auto& entry : m_orderIndex) {
+            entry = OrderIndexEntry{};
+        }
+    }
+
+    [[nodiscard]] std::size_t allocateOrderSlot() noexcept {
+        if (m_freeOrderCount == 0) {
+            return INVALID_INDEX;
+        }
+        return m_freeOrderSlots[--m_freeOrderCount];
+    }
+
+    void releaseOrderSlot(std::size_t slotIndex) noexcept {
+        m_orderSlots[slotIndex] = OrderSlot{};
+        m_freeOrderSlots[m_freeOrderCount++] = slotIndex;
+    }
+
+    [[nodiscard]] LevelSlot& levelSlot(Side side, std::size_t index) noexcept {
+        return side == Side::Buy ? m_bidLevels[index] : m_askLevels[index];
+    }
+
+    [[nodiscard]] const LevelSlot& levelSlot(Side side, std::size_t index) const noexcept {
+        return side == Side::Buy ? m_bidLevels[index] : m_askLevels[index];
+    }
+
+    [[nodiscard]] std::size_t findLevel(Side side, Price price) const noexcept {
+        const auto& levels = side == Side::Buy ? m_bidLevels : m_askLevels;
+        const std::size_t count = side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
+
+        for (std::size_t i = 0; i < count; ++i) {
+            if (levels[i].level.price == price) {
+                return i;
+            }
+        }
+        return INVALID_INDEX;
+    }
+
+    [[nodiscard]] std::size_t findOrInsertLevel(Side side, Price price) noexcept {
+        const std::size_t existing = findLevel(side, price);
+        if (existing != INVALID_INDEX) {
+            return existing;
+        }
+
+        auto& levels = side == Side::Buy ? m_bidLevels : m_askLevels;
+        std::size_t& count = side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
+
+        if (count >= MaxLevels) {
+            return INVALID_INDEX;
+        }
+
+        std::size_t insertPos = 0;
         if (side == Side::Buy) {
-            if (m_bids.empty()) {
-                m_bestBid = INVALID_PRICE;
-            } else {
-                m_bestBid = m_bids.rbegin()->first;
+            while (insertPos < count && levels[insertPos].level.price > price) {
+                ++insertPos;
             }
         } else {
-            if (m_asks.empty()) {
-                m_bestAsk = INVALID_PRICE;
-            } else {
-                m_bestAsk = m_asks.begin()->first;
+            while (insertPos < count && levels[insertPos].level.price < price) {
+                ++insertPos;
             }
+        }
+
+        for (std::size_t i = count; i > insertPos; --i) {
+            levels[i] = levels[i - 1U];
+            updateLevelLinks(i, levels[i]);
+        }
+
+        levels[insertPos] = LevelSlot{};
+        levels[insertPos].level.price = price;
+        levels[insertPos].active = true;
+        ++count;
+
+        return insertPos;
+    }
+
+    void removeLevelIfEmpty(Side side, std::size_t levelIndex) noexcept {
+        auto& levels = side == Side::Buy ? m_bidLevels : m_askLevels;
+        std::size_t& count = side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
+
+        if (levelIndex >= count || !levels[levelIndex].level.empty()) {
+            return;
+        }
+
+        for (std::size_t i = levelIndex; i + 1U < count; ++i) {
+            levels[i] = levels[i + 1U];
+            updateLevelLinks(i, levels[i]);
+        }
+
+        --count;
+        levels[count] = LevelSlot{};
+    }
+
+    void updateLevelLinks(std::size_t levelIndex, const LevelSlot& level) noexcept {
+        std::size_t slotIndex = level.firstOrderSlot;
+        while (slotIndex != INVALID_INDEX) {
+            m_orderSlots[slotIndex].levelIndex = levelIndex;
+            slotIndex = m_orderSlots[slotIndex].next;
+        }
+    }
+
+    void appendOrderToLevel(LevelSlot& level, std::size_t slotIndex) noexcept {
+        OrderSlot& slot = m_orderSlots[slotIndex];
+        slot.prev = level.lastOrderSlot;
+        slot.next = INVALID_INDEX;
+
+        if (level.lastOrderSlot != INVALID_INDEX) {
+            m_orderSlots[level.lastOrderSlot].next = slotIndex;
+        } else {
+            level.firstOrderSlot = slotIndex;
+        }
+
+        level.lastOrderSlot = slotIndex;
+    }
+
+    void unlinkOrderFromLevel(LevelSlot& level, std::size_t slotIndex) noexcept {
+        OrderSlot& slot = m_orderSlots[slotIndex];
+
+        if (slot.prev != INVALID_INDEX) {
+            m_orderSlots[slot.prev].next = slot.next;
+        } else {
+            level.firstOrderSlot = slot.next;
+        }
+
+        if (slot.next != INVALID_INDEX) {
+            m_orderSlots[slot.next].prev = slot.prev;
+        } else {
+            level.lastOrderSlot = slot.prev;
+        }
+
+        slot.next = INVALID_INDEX;
+        slot.prev = INVALID_INDEX;
+    }
+
+    [[nodiscard]] std::size_t indexBucket(OrderId orderId) const noexcept {
+        return static_cast<std::size_t>(detail::mixOrderId(orderId)) & (ORDER_INDEX_CAPACITY - 1U);
+    }
+
+    [[nodiscard]] std::size_t findOrderSlot(OrderId orderId) const noexcept {
+        std::size_t index = indexBucket(orderId);
+
+        for (std::size_t probe = 0; probe < ORDER_INDEX_CAPACITY; ++probe) {
+            const OrderIndexEntry& entry = m_orderIndex[index];
+            if (entry.state == INDEX_EMPTY) {
+                return INVALID_INDEX;
+            }
+            if (entry.state == INDEX_OCCUPIED && entry.orderId == orderId) {
+                return entry.slotIndex;
+            }
+            index = (index + 1U) & (ORDER_INDEX_CAPACITY - 1U);
+        }
+
+        return INVALID_INDEX;
+    }
+
+    [[nodiscard]] bool insertOrderIndex(OrderId orderId, std::size_t slotIndex) noexcept {
+        std::size_t index = indexBucket(orderId);
+        std::size_t firstDeleted = INVALID_INDEX;
+
+        for (std::size_t probe = 0; probe < ORDER_INDEX_CAPACITY; ++probe) {
+            OrderIndexEntry& entry = m_orderIndex[index];
+            if (entry.state == INDEX_OCCUPIED && entry.orderId == orderId) {
+                return false;
+            }
+            if (entry.state == INDEX_DELETED && firstDeleted == INVALID_INDEX) {
+                firstDeleted = index;
+            }
+            if (entry.state == INDEX_EMPTY) {
+                OrderIndexEntry& target = firstDeleted == INVALID_INDEX ? entry : m_orderIndex[firstDeleted];
+                target.orderId = orderId;
+                target.slotIndex = slotIndex;
+                target.state = INDEX_OCCUPIED;
+                return true;
+            }
+            index = (index + 1U) & (ORDER_INDEX_CAPACITY - 1U);
+        }
+
+        if (firstDeleted != INVALID_INDEX) {
+            OrderIndexEntry& target = m_orderIndex[firstDeleted];
+            target.orderId = orderId;
+            target.slotIndex = slotIndex;
+            target.state = INDEX_OCCUPIED;
+            return true;
+        }
+
+        return false;
+    }
+
+    void eraseOrderIndex(OrderId orderId) noexcept {
+        std::size_t index = indexBucket(orderId);
+
+        for (std::size_t probe = 0; probe < ORDER_INDEX_CAPACITY; ++probe) {
+            OrderIndexEntry& entry = m_orderIndex[index];
+            if (entry.state == INDEX_EMPTY) {
+                return;
+            }
+            if (entry.state == INDEX_OCCUPIED && entry.orderId == orderId) {
+                entry = OrderIndexEntry{};
+                reinsertClusterAfterErase(index);
+                return;
+            }
+            index = (index + 1U) & (ORDER_INDEX_CAPACITY - 1U);
+        }
+    }
+
+    void reinsertClusterAfterErase(std::size_t erasedIndex) noexcept {
+        std::size_t index = (erasedIndex + 1U) & (ORDER_INDEX_CAPACITY - 1U);
+
+        while (m_orderIndex[index].state == INDEX_OCCUPIED) {
+            const OrderIndexEntry entry = m_orderIndex[index];
+            m_orderIndex[index] = OrderIndexEntry{};
+            (void)insertOrderIndex(entry.orderId, entry.slotIndex);
+            index = (index + 1U) & (ORDER_INDEX_CAPACITY - 1U);
+        }
+    }
+
+    void updateBBO(Side side) noexcept {
+        if (side == Side::Buy) {
+            m_bestBid = m_bidLevelCount == 0 ? INVALID_PRICE : m_bidLevels[0].level.price;
+        } else {
+            m_bestAsk = m_askLevelCount == 0 ? INVALID_PRICE : m_askLevels[0].level.price;
         }
     }
 
@@ -498,27 +643,24 @@ private:
         }
     }
 
-    /// Bids sorted by price (highest first via reverse iteration)
-    std::map<Price, PriceLevel> m_bids;
+    std::array<LevelSlot, MaxLevels> m_bidLevels{};
+    std::array<LevelSlot, MaxLevels> m_askLevels{};
+    std::size_t m_bidLevelCount{0};
+    std::size_t m_askLevelCount{0};
 
-    /// Asks sorted by price (lowest first)
-    std::map<Price, PriceLevel> m_asks;
+    std::array<OrderSlot, MaxOrders> m_orderSlots{};
+    std::array<std::size_t, MaxOrders> m_freeOrderSlots{};
+    std::size_t m_freeOrderCount{0};
+    std::size_t m_orderCount{0};
 
-    /// Order lookup by ID
-    std::unordered_map<OrderId, Order> m_orders;
+    std::array<OrderIndexEntry, ORDER_INDEX_CAPACITY> m_orderIndex{};
 
-    /// Best bid/ask cache
     Price m_bestBid{INVALID_PRICE};
     Price m_bestAsk{INVALID_PRICE};
-
-    /// Symbol identifier
     SymbolId m_symbolId{0};
-
-    /// Update callback
     UpdateCallback m_updateCallback;
 };
 
-/// Default order book type
 using DefaultOrderBook = OrderBook<100, 10000>;
 
 } // namespace hft
