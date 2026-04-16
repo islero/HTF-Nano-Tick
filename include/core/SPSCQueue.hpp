@@ -170,7 +170,7 @@ public:
     [[nodiscard]] std::optional<T> pop() noexcept {
         T value;
         if (tryPop(value)) {
-            return std::move(value);
+            return value;
         }
         return std::nullopt;
     }

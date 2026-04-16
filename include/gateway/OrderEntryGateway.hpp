@@ -83,20 +83,20 @@ struct GatewayConfig {
  * @brief Internal order representation with full state tracking.
  */
 struct alignas(CACHE_LINE_SIZE) InternalOrder {
-    OrderId clientOrderId; ///< Client-assigned order ID
-    OrderId exchangeOrderId; ///< Exchange-assigned order ID
-    SymbolId symbolId; ///< Instrument
+    OrderId clientOrderId{INVALID_ORDER_ID}; ///< Client-assigned order ID
+    OrderId exchangeOrderId{INVALID_ORDER_ID}; ///< Exchange-assigned order ID
+    SymbolId symbolId{0}; ///< Instrument
     std::string symbol; ///< Symbol string
-    Side side; ///< Buy/Sell
-    Price price; ///< Limit price
-    Quantity orderQty; ///< Original quantity
-    Quantity filledQty; ///< Cumulative filled quantity
-    Quantity remainingQty; ///< Remaining quantity
-    OrderStatus status; ///< Current status
-    OrderType orderType; ///< Order type
-    Timestamp submitTime; ///< When order was submitted
-    Timestamp lastUpdateTime; ///< Last status change
-    std::uint64_t strategyId; ///< Originating strategy
+    Side side{Side::Buy}; ///< Buy/Sell
+    Price price{INVALID_PRICE}; ///< Limit price
+    Quantity orderQty{0}; ///< Original quantity
+    Quantity filledQty{0}; ///< Cumulative filled quantity
+    Quantity remainingQty{0}; ///< Remaining quantity
+    OrderStatus status{OrderStatus::Rejected}; ///< Current status
+    OrderType orderType{OrderType::Limit}; ///< Order type
+    Timestamp submitTime{0}; ///< When order was submitted
+    Timestamp lastUpdateTime{0}; ///< Last status change
+    std::uint64_t strategyId{0}; ///< Originating strategy
 
     InternalOrder() noexcept = default;
 
@@ -118,15 +118,15 @@ struct alignas(CACHE_LINE_SIZE) InternalOrder {
  * @brief Execution report from exchange.
  */
 struct ExecutionReport {
-    OrderId clientOrderId;
-    OrderId exchangeOrderId;
-    OrderStatus status;
-    Price lastPrice; ///< Last fill price
-    Quantity lastQty; ///< Last fill quantity
-    Quantity cumulativeQty; ///< Total filled quantity
-    Quantity leavesQty; ///< Remaining quantity
-    Timestamp transactTime; ///< Exchange timestamp
-    int rejectReason; ///< Reason code if rejected
+    OrderId clientOrderId{INVALID_ORDER_ID};
+    OrderId exchangeOrderId{INVALID_ORDER_ID};
+    OrderStatus status{OrderStatus::Rejected};
+    Price lastPrice{INVALID_PRICE}; ///< Last fill price
+    Quantity lastQty{0}; ///< Last fill quantity
+    Quantity cumulativeQty{0}; ///< Total filled quantity
+    Quantity leavesQty{0}; ///< Remaining quantity
+    Timestamp transactTime{0}; ///< Exchange timestamp
+    int rejectReason{0}; ///< Reason code if rejected
     std::string text; ///< Reject reason text
 };
 

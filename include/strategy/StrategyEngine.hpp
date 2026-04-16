@@ -41,13 +41,13 @@ namespace hft {
  * to the order entry gateway for execution.
  */
 struct alignas(CACHE_LINE_SIZE) OrderRequest {
-    SymbolId symbolId; ///< Target instrument
-    Side side; ///< Buy or Sell
-    Price price; ///< Limit price (0 for market)
-    Quantity quantity; ///< Order quantity
-    OrderType orderType; ///< Order type
-    Timestamp requestTime; ///< Strategy signal timestamp
-    std::uint64_t strategyId; ///< Originating strategy ID
+    SymbolId symbolId{0}; ///< Target instrument
+    Side side{Side::Buy}; ///< Buy or Sell
+    Price price{INVALID_PRICE}; ///< Limit price (0 for market)
+    Quantity quantity{0}; ///< Order quantity
+    OrderType orderType{OrderType::Limit}; ///< Order type
+    Timestamp requestTime{0}; ///< Strategy signal timestamp
+    std::uint64_t strategyId{0}; ///< Originating strategy ID
 
     OrderRequest() noexcept = default;
 
@@ -414,6 +414,7 @@ public:
     // CRTP Hook Implementations
     //==========================================================================
 
+    // cppcheck-suppress duplInheritedMember
     bool onInitialize() noexcept {
         if (!m_spotBook || !m_futuresBook) {
             return false;
@@ -427,6 +428,7 @@ public:
         return true;
     }
 
+    // cppcheck-suppress duplInheritedMember
     void onTick(const OrderBookUpdate& update) noexcept {
         // Update internal state tracking
         (void)update;
@@ -445,6 +447,7 @@ public:
      *
      * @return Trading signal or Signal::None.
      */
+    // cppcheck-suppress duplInheritedMember
     Signal computeSignal() noexcept {
         // Ensure we have valid prices on both sides
         if (m_spotBid == INVALID_PRICE || m_spotAsk == INVALID_PRICE || m_futuresBid == INVALID_PRICE ||
@@ -520,6 +523,7 @@ public:
      * @return Vector of order requests (typically 2 for arb).
      */
     template <std::size_t Capacity>
+    // cppcheck-suppress duplInheritedMember
     void generateOrdersInto(Signal signal, OrderRequestBatch<Capacity>& orders) noexcept {
         Quantity qty = m_config.defaultQty;
 
@@ -542,6 +546,7 @@ public:
         }
     }
 
+    // cppcheck-suppress duplInheritedMember
     std::vector<OrderRequest> generateOrders(Signal signal) noexcept {
         OrderBatch batch;
         generateOrdersInto(signal, batch);
@@ -554,6 +559,7 @@ public:
         return orders;
     }
 
+    // cppcheck-suppress duplInheritedMember
     void onOrderFill(OrderId orderId, Price fillPrice, Quantity fillQty) noexcept {
         // Update position tracking
         // In production, we'd need to track which order belongs to which leg

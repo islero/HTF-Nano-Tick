@@ -73,10 +73,10 @@ enum class LogLevel : std::uint8_t { Trace = 0, Debug = 1, Info = 2, Warn = 3, E
 struct alignas(CACHE_LINE_SIZE) LogMessage {
     static constexpr std::size_t MAX_MSG_LEN = 200;
 
-    Timestamp timestamp; ///< Nanoseconds since epoch
-    LogLevel level; ///< Severity level
-    std::uint8_t msgLen; ///< Actual message length
-    char message[MAX_MSG_LEN]; ///< Message buffer
+    Timestamp timestamp{0}; ///< Nanoseconds since epoch
+    LogLevel level{LogLevel::Info}; ///< Severity level
+    std::uint8_t msgLen{0}; ///< Actual message length
+    char message[MAX_MSG_LEN]{}; ///< Message buffer
 
     LogMessage() noexcept = default;
 

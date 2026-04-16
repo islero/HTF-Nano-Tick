@@ -350,15 +350,15 @@ static void BM_TickToSignal_Latency(benchmark::State& state) {
     DefaultOrderBook spotBook(1);
     DefaultOrderBook futuresBook(2);
 
-    spotBook.addOrder(1, Side::Buy, priceFromDouble(50000.0), 100);
-    spotBook.addOrder(2, Side::Sell, priceFromDouble(50010.0), 100);
-    futuresBook.addOrder(3, Side::Buy, priceFromDouble(50100.0), 100);
-    futuresBook.addOrder(4, Side::Sell, priceFromDouble(50110.0), 100);
+    (void)spotBook.addOrder(1, Side::Buy, priceFromDouble(50000.0), 100);
+    (void)spotBook.addOrder(2, Side::Sell, priceFromDouble(50010.0), 100);
+    (void)futuresBook.addOrder(3, Side::Buy, priceFromDouble(50100.0), 100);
+    (void)futuresBook.addOrder(4, Side::Sell, priceFromDouble(50110.0), 100);
 
     CashCarryConfig config;
     config.entryThreshold = priceFromDouble(50.0);
     CashCarryArbitrage strategy(&spotBook, &futuresBook, config, 1);
-    strategy.initialize();
+    (void)strategy.initialize();
 
     OrderBookUpdate update;
     update.action = MdMsgType::Modify;
@@ -388,8 +388,8 @@ static void BM_OrderBook_UpdatePath(benchmark::State& state) {
 
     // Pre-populate
     for (OrderId i = 1; i <= 100; ++i) {
-        book.addOrder(i, Side::Buy, priceFromDouble(50000.0 - static_cast<double>(i)), 100);
-        book.addOrder(i + 100, Side::Sell, priceFromDouble(50000.0 + static_cast<double>(i)), 100);
+        (void)book.addOrder(i, Side::Buy, priceFromDouble(50000.0 - static_cast<double>(i)), 100);
+        (void)book.addOrder(i + 100, Side::Sell, priceFromDouble(50000.0 + static_cast<double>(i)), 100);
     }
 
     DefaultLatencyHistogram histogram;
@@ -399,7 +399,7 @@ static void BM_OrderBook_UpdatePath(benchmark::State& state) {
         auto start = rdtsc();
 
         // Add order
-        book.addOrder(nextId, Side::Buy, priceFromDouble(49950.0), 50);
+        (void)book.addOrder(nextId, Side::Buy, priceFromDouble(49950.0), 50);
 
         // Query BBO
         auto bid = book.bestBid();
@@ -408,7 +408,7 @@ static void BM_OrderBook_UpdatePath(benchmark::State& state) {
         benchmark::DoNotOptimize(ask);
 
         // Delete order
-        book.deleteOrder(nextId);
+        (void)book.deleteOrder(nextId);
 
         auto end = rdtsc();
         histogram.recordCycles(start, end);

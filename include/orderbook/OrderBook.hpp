@@ -54,12 +54,12 @@ namespace detail {
  * @brief Single order entry in the order book.
  */
 struct alignas(CACHE_LINE_SIZE) Order {
-    OrderId orderId; ///< Unique order identifier
-    Price price; ///< Limit price (fixed-point)
-    Quantity quantity; ///< Remaining quantity
-    Quantity filledQty; ///< Filled quantity
-    Side side; ///< Buy or Sell
-    Timestamp timestamp; ///< Order entry time
+    OrderId orderId{INVALID_ORDER_ID}; ///< Unique order identifier
+    Price price{INVALID_PRICE}; ///< Limit price (fixed-point)
+    Quantity quantity{0}; ///< Remaining quantity
+    Quantity filledQty{0}; ///< Filled quantity
+    Side side{Side::Buy}; ///< Buy or Sell
+    Timestamp timestamp{0}; ///< Order entry time
 
     constexpr Order() noexcept = default;
 
@@ -98,13 +98,13 @@ struct PriceLevel {
  * @brief Event emitted when order book state changes.
  */
 struct OrderBookUpdate {
-    MdMsgType action; ///< Add, Modify, Delete, Trade
-    Side side; ///< Affected side
-    Price price; ///< Affected price level
-    Quantity quantity; ///< New/changed quantity
-    Quantity totalQtyAtLevel; ///< Total quantity at price level after update
-    OrderId orderId; ///< Related order ID
-    Timestamp timestamp; ///< Event timestamp
+    MdMsgType action{MdMsgType::Heartbeat}; ///< Add, Modify, Delete, Trade
+    Side side{Side::Buy}; ///< Affected side
+    Price price{INVALID_PRICE}; ///< Affected price level
+    Quantity quantity{0}; ///< New/changed quantity
+    Quantity totalQtyAtLevel{0}; ///< Total quantity at price level after update
+    OrderId orderId{INVALID_ORDER_ID}; ///< Related order ID
+    Timestamp timestamp{0}; ///< Event timestamp
 };
 
 //==============================================================================

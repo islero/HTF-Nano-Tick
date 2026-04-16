@@ -162,8 +162,12 @@ struct alignas(16) Symbol {
     constexpr Symbol() noexcept = default;
 
     constexpr explicit Symbol(const char* str) noexcept {
+        if (str == nullptr) {
+            return;
+        }
+
         std::size_t i = 0;
-        while (i < MAX_LENGTH && str[i] != '\0') {
+        while (i + 1 < data.size() && str[i] != '\0') {
             data[i] = str[i];
             ++i;
         }
@@ -173,7 +177,7 @@ struct alignas(16) Symbol {
     [[nodiscard]] constexpr const char* c_str() const noexcept { return data.data(); }
 
     [[nodiscard]] constexpr bool operator==(const Symbol& other) const noexcept {
-        for (std::size_t i = 0; i <= MAX_LENGTH; ++i) {
+        for (std::size_t i = 0; i < data.size(); ++i) {
             if (data[i] != other.data[i]) return false;
             if (data[i] == '\0') break;
         }

@@ -72,15 +72,15 @@ struct MarketDataConfig {
  * the wire protocol (FIX, binary, etc.).
  */
 struct alignas(CACHE_LINE_SIZE) MarketDataMessage {
-    SymbolId symbolId; ///< Instrument symbol
-    SeqNum seqNum; ///< Exchange sequence number
-    Timestamp sendingTime; ///< Exchange timestamp (SendingTime)
-    Timestamp receiveTime; ///< Local receive timestamp
-    MdMsgType msgType; ///< Message type
-    Side side; ///< Bid/Ask for book updates
-    Price price; ///< Price
-    Quantity quantity; ///< Quantity
-    OrderId orderId; ///< Order ID (for order-level books)
+    SymbolId symbolId{0}; ///< Instrument symbol
+    SeqNum seqNum{0}; ///< Exchange sequence number
+    Timestamp sendingTime{0}; ///< Exchange timestamp (SendingTime)
+    Timestamp receiveTime{0}; ///< Local receive timestamp
+    MdMsgType msgType{MdMsgType::Heartbeat}; ///< Message type
+    Side side{Side::Buy}; ///< Bid/Ask for book updates
+    Price price{INVALID_PRICE}; ///< Price
+    Quantity quantity{0}; ///< Quantity
+    OrderId orderId{INVALID_ORDER_ID}; ///< Order ID (for order-level books)
 
     MarketDataMessage() noexcept = default;
 
@@ -568,6 +568,7 @@ public:
     void registerOrderBook(SymbolId symbolId, DefaultOrderBook* book) noexcept { m_orderBooks[symbolId] = book; }
 
     // CRTP implementations
+    // cppcheck-suppress duplInheritedMember
     void onStaleMessage(const MarketDataMessage& msg, Timestamp latency) noexcept {
         // Log stale message (could be throttled in production)
         (void)HFT_LOG_WARN("Stale market data detected");
@@ -575,6 +576,7 @@ public:
         (void)latency;
     }
 
+    // cppcheck-suppress duplInheritedMember
     void onSequenceGap(SymbolId symbolId, SeqNum lastSeq, SeqNum newSeq) noexcept {
         (void)HFT_LOG_WARN("Sequence gap detected");
         (void)symbolId;
@@ -582,6 +584,7 @@ public:
         (void)newSeq;
     }
 
+    // cppcheck-suppress duplInheritedMember
     void onMarketDataUpdate(const MarketDataMessage& msg) noexcept {
         auto it = m_orderBooks.find(msg.symbolId);
         if (it == m_orderBooks.end()) return;
