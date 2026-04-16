@@ -5,15 +5,16 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
-A high-frequency trading (HFT) system skeleton implemented in modern C++20, designed to demonstrate production-grade low-latency architecture patterns. This project implements a **Spot-Futures Cash and Carry Arbitrage Strategy** with emphasis on zero-allocation hot paths, lock-free data structures, and compile-time optimizations.
+A low-latency trading engine prototype implemented in modern C++20. The project demonstrates bounded order-book storage, lock-free SPSC queues, protocol-neutral order submission, and a **Spot-Futures Cash and Carry Arbitrage Strategy**. It is a technical portfolio/learning system, not a complete production trading stack.
 
 ## Highlights
 
-- **Sub-microsecond latency**: Tick-to-trade target < 1μs
-- **Zero-allocation hot path**: Pre-allocated pools, arenas, and stack allocation
+- **Bounded order book**: Preallocated order slots, price levels, and open-addressed order-id lookup
+- **Allocation-aware hot paths**: No heap allocation for order book add/modify/delete, SPSC queue push/pop, or strategy batch output
 - **Lock-free concurrency**: SPSC queues with wait-free guarantees
 - **Compile-time optimization**: CRTP eliminates virtual dispatch overhead
-- **Cross-platform**: Tested on Linux (GCC/Clang), macOS, and Windows (MSVC)
+- **Protocol-neutral gateway**: Core order lifecycle no longer depends on QuickFIX types
+- **Cross-platform CI intent**: Linux, macOS, Windows, sanitizers, formatting, and static analysis
 - **Production patterns**: Cache-line alignment, false sharing prevention, RDTSC timing
 
 ## Table of Contents
@@ -38,8 +39,8 @@ A high-frequency trading (HFT) system skeleton implemented in modern C++20, desi
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐     │
-│  │  Network Layer  │───▶│ Market Data      │───▶│    Order Book       │     │
-│  │  (FIX Protocol) │    │ Handler          │    │    (Spot/Futures)   │     │
+│  │  Protocol       │───▶│ Market Data      │───▶│    Order Book       │     │
+│  │  Adapter        │    │ Handler          │    │    (Spot/Futures)   │     │
 │  └─────────────────┘    │ • Stale Check    │    └──────────┬──────────┘     │
 │                         │ • Seq Gap Detect │               │                │
 │                         └──────────────────┘               │                │
@@ -53,7 +54,7 @@ A high-frequency trading (HFT) system skeleton implemented in modern C++20, desi
 │                         ┌──────────────────┐    ┌─────────────────────┐     │
 │                         │  Order Entry     │───▶│   Risk Management   │     │
 │                         │  Gateway         │    │   • Rate Limiting   │     │
-│                         │  • FIX Builder   │    │   • Position Limits │     │
+│                         │  • Native Msgs   │    │   • Pending Exposure│     │
 │                         └──────────────────┘    └─────────────────────┘     │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -66,13 +67,13 @@ A high-frequency trading (HFT) system skeleton implemented in modern C++20, desi
 
 ### Data Flow
 
-1. **Market Data Ingestion**: FIX messages are parsed using a zero-copy parser
+1. **Market Data Ingestion**: Protocol adapters normalize wire messages into `MarketDataMessage`
 2. **Stale Data Protection**: Messages older than threshold (default 50ms) are discarded
 3. **Order Book Update**: Limit order book is updated with price/quantity changes
 4. **Strategy Evaluation**: CRTP-based strategy engine evaluates arbitrage opportunities
 5. **Order Generation**: Paired orders (buy spot/sell futures or vice versa) are created
 6. **Risk Validation**: Pre-trade risk checks (position limits, rate limits) are applied
-7. **Order Submission**: FIX messages are built and sent to the exchange
+7. **Order Submission**: Protocol-neutral outbound order messages are emitted for an adapter or simulator
 
 ---
 
@@ -91,8 +92,8 @@ HFT NanoTick/
 │   │   └── Timestamp.hpp      # RDTSC timing and latency histograms
 │   │
 │   ├── market_data/
-│   │   ├── FixParser.hpp      # Zero-copy FIX protocol parser
-│   │   └── MarketDataHandler.hpp  # Stale data protection, sequence gaps
+│   │   ├── MarketDataHandler.hpp  # Stale data protection, sequence gaps
+│   │   └── QuickFixApplication.hpp # Optional QuickFIX integration, disabled by default
 │   │
 │   ├── orderbook/
 │   │   └── OrderBook.hpp      # Templated limit order book
@@ -101,7 +102,7 @@ HFT NanoTick/
 │   │   └── StrategyEngine.hpp # CRTP strategy framework, Cash & Carry
 │   │
 │   ├── gateway/
-│   │   └── OrderEntryGateway.hpp  # Order management, risk checks
+│   │   └── OrderEntryGateway.hpp  # Order management, risk checks, outbound commands
 │   │
 │   └── utils/
 │       └── Logger.hpp         # Async lock-free logging
@@ -111,8 +112,10 @@ HFT NanoTick/
 │
 ├── tests/                     # Google Test unit tests
 │   ├── test_orderbook.cpp
+│   ├── test_gateway.cpp
+│   ├── test_latency.cpp
+│   ├── test_public_headers.cpp
 │   ├── test_spsc_queue.cpp
-│   ├── test_fix_parser.cpp
 │   └── test_strategy.cpp
 │
 └── benchmarks/                # Google Benchmark performance tests
@@ -132,10 +135,10 @@ In HFT, memory allocation is a significant source of latency variance:
 - Dynamic allocation invokes the system allocator, potentially blocking
 
 **Our approach:**
-- Pre-allocated object pools for orders and messages
+- Pre-allocated order slots, price levels, and open-addressed order-id indexes
 - Linear arenas for per-tick scratch memory
-- Fixed-size buffers for FIX message building
-- Stack allocation where possible
+- Fixed-capacity strategy order batches
+- Bounded ring buffer for gateway rate limiting
 
 ### Cache Efficiency
 
@@ -147,7 +150,7 @@ Modern CPUs execute faster than they can fetch data:
 
 **Our approach:**
 - `alignas(64)` on frequently accessed structures to prevent false sharing
-- Contiguous memory layouts in order books
+- Contiguous bounded arrays in order books
 - SPSC queue slots aligned to cache lines
 - Hot/cold data separation
 
@@ -211,8 +214,10 @@ book.deleteOrder(orderId);
 ```
 
 **Key features:**
-- std::map for price-time priority
-- Hash map for O(1) order lookup by ID
+- Preallocated order slots, reusable through a bounded free list
+- Sorted bounded price-level arrays per side
+- Open-addressed order-id lookup
+- Intrusive FIFO links per price level
 - Callback support for market data updates
 
 ### CRTP Strategy Engine (`StrategyEngine.hpp`)
@@ -237,6 +242,22 @@ public:
 - CRTP: Zero overhead, fully inlined
 - Enables aggressive compiler optimizations
 
+### Strategy Engine (`StrategyEngine.hpp`)
+
+The strategy API has a fixed-capacity output path for latency-sensitive code:
+
+```cpp
+CashCarryArbitrage strategy(&spotBook, &futureBook);
+StrategyBase<CashCarryArbitrage>::OrderBatch orders;
+
+std::size_t count = strategy.onMarketDataInto(update, orders);
+for (std::size_t i = 0; i < count; ++i) {
+    submit(orders[i]);
+}
+```
+
+The older `onMarketData()` wrapper still returns `std::vector<OrderRequest>` for tests and examples, but production-style code should use `onMarketDataInto()`.
+
 ### Market Data Handler (`MarketDataHandler.hpp`)
 
 Stale data protection prevents trading on outdated quotes:
@@ -247,8 +268,13 @@ config.staleThresholdNanos = 50'000'000; // 50ms
 
 DefaultMarketDataHandler handler(config);
 
-// Process message - automatically filters stale data
-handler.processMessage(data, length, receiveTime);
+MarketDataMessage msg;
+msg.symbolId = 1;
+msg.sendingTime = exchangeTime;
+msg.receiveTime = nowNanos();
+
+handler.enqueue(msg);
+handler.processNext();
 ```
 
 **Stale data check logic:**
@@ -258,23 +284,19 @@ if (receiveTime - sendingTime > threshold) {
 }
 ```
 
-### Zero-Copy FIX Parser (`FixParser.hpp`)
+### Order Entry Gateway (`OrderEntryGateway.hpp`)
 
-Parses FIX messages without memory allocation:
+The gateway core emits protocol-neutral commands:
 
 ```cpp
-FixParser parser;
-if (parser.parse(data, length)) {
-    auto symbol = parser.symbol();           // string_view into original buffer
-    Price price = parser.getField(44).asPrice();
-    int64_t qty = parser.getField(38).asInt();
-}
+DefaultOrderGateway gateway;
+gateway.setSendCallback([](const OutboundOrderMessage& message) {
+    // Translate to FIX, native binary protocol, or simulator input.
+    return true;
+});
 ```
 
-**Design:**
-- String views point into original message buffer
-- Indexed tag lookup for common fields (O(1))
-- Linear scan fallback for rare fields
+Risk checks include max notional, open/pending order limits, rate limiting, and pending exposure in position-limit checks. QuickFIX-specific translation is intentionally outside the core gateway path unless `HFT_ENABLE_QUICKFIX` is provided by a separate integration build.
 
 ---
 
@@ -357,66 +379,24 @@ ctest --output-on-failure
 
 ## Benchmark Results
 
-Measured on Apple M4 Pro, compiled with `-O3 -march=native`:
+Representative local short run on Apple M4 Pro, compiled with `-O3 -march=native`.
+Google Benchmark could not set thread affinity on this machine, so treat these as local regression numbers, not exchange-grade latency claims.
 
 ### Order Book Performance
 
 | Benchmark | Time | Throughput |
 |-----------|------|------------|
-| AddOrder | 37.4 ns | 26.7 M ops/s |
-| AddAndDelete | 63.4 ns | 15.8 M ops/s |
-| ModifyOrder | 13.7 ns | 72.9 M ops/s |
-| BestBidQuery | 0.27 ns | 3.75 G ops/s |
-| MidPriceQuery | 0.47 ns | 2.14 G ops/s |
-| SpreadQuery | 0.27 ns | 3.74 G ops/s |
-| GetTopLevels | 41.7 ns | 24.0 M ops/s |
-| RandomOperations | 111 ns | 9.0 M ops/s |
-
-**Deep Book Operations (batch add):**
-
-| Orders | Time | Throughput |
-|--------|------|------------|
-| 10 | 870 ns | 11.5 M ops/s |
-| 64 | 3.58 µs | 17.9 M ops/s |
-| 512 | 30.7 µs | 16.7 M ops/s |
-| 1000 | 62.4 µs | 16.0 M ops/s |
+| AddOrder | 50.8 ns | 19.7 M ops/s |
+| AddAndDelete | 22.6 ns | 44.3 M ops/s |
+| ModifyOrder | 3.11 ns | 321 M ops/s |
+| RandomOperations | 61.2 ns | 16.3 M ops/s |
 
 ### SPSC Queue Performance
 
 | Benchmark | Time | Throughput |
 |-----------|------|------------|
-| PushPop (single thread) | 3.09 ns | 647 M ops/s |
-| Push (single thread) | 2.83 ns | 353 M ops/s |
-| Emplace (single thread) | 2.84 ns | 352 M ops/s |
-| Two-Thread Throughput | 49.3 ns | 20.3 M ops/s |
-| Latency (avg) | 46.3 ns | 32.8 ns avg latency |
-| FrontPeek | 0.31 ns | 3.28 G ops/s |
-| EmptyCheck | 0.57 ns | 1.76 G ops/s |
-| SizeApprox | 0.60 ns | 1.66 G ops/s |
-
-**Element Size Scaling:**
-
-| Size (bytes) | Time | Bandwidth |
-|--------------|------|-----------|
-| 8 | 2.68 ns | 5.6 GiB/s |
-| 64 | 3.47 ns | 34.4 GiB/s |
-| 128 | 4.44 ns | 53.7 GiB/s |
-| 256 | 7.39 ns | 64.5 GiB/s |
-
-**Queue Size Impact:**
-
-| Capacity | Time | Throughput |
-|----------|------|------------|
-| 1K | 2.32 ns | 864 M ops/s |
-| 64K | 2.72 ns | 734 M ops/s |
-
-**Burst Operations:**
-
-| Burst Size | Time | Throughput |
-|------------|------|------------|
-| 64 | 215 ns | 596 M ops/s |
-| 512 | 2.26 µs | 454 M ops/s |
-| 4096 | 19.4 µs | 422 M ops/s |
+| PushPop (single thread) | 3.14 ns | 637 M ops/s |
+| Two-Thread Throughput | 24.8 ns | 40.3 M ops/s |
 
 ---
 
@@ -427,11 +407,11 @@ Measured on Apple M4 Pro, compiled with `-O3 -march=native`:
 | Component | Target | Notes |
 |-----------|--------|-------|
 | SPSC Queue Push/Pop | < 20 ns | Single cache line access |
-| Order Book Add | < 500 ns | Map insertion |
+| Order Book Add | < 500 ns | Bounded level insert and order-id index |
 | Order Book BBO Query | < 10 ns | Cached values |
-| FIX Parse | < 100 ns | Zero-copy, no allocation |
-| Strategy Signal | < 50 ns | Inlined via CRTP |
-| Tick-to-Trade | < 1 µs | End-to-end target |
+| Strategy Signal | < 100 ns | Use fixed-capacity output batch |
+| Gateway Risk Check | < 500 ns | Includes pending exposure and rate-limit ring |
+| Tick-to-Trade | TBD | Requires protocol adapter, replay harness, and end-to-end measurement |
 
 ### Optimization Checklist
 
@@ -485,22 +465,14 @@ Fixed-point with 8 decimal places:
 - Integer arithmetic (faster)
 - Deterministic results
 
-### Why Zero-Copy FIX Parsing?
+### Why a Protocol-Neutral Gateway Core?
 
-Traditional parsing copies strings:
-```cpp
-std::string symbol = extractField(message, 55);  // Allocates!
-```
-
-Zero-copy approach:
-```cpp
-std::string_view symbol = getField(55).value;  // Just a pointer + length
-```
+Order lifecycle, risk checks, and position tracking should not depend on a specific wire protocol library. The core gateway emits `OutboundOrderMessage`; a separate adapter can translate that to FIX, a binary native protocol, or a simulator.
 
 Benefits:
-- No heap allocation
-- No string copying
-- Cache-friendly linear scan
+- Public headers compile without QuickFIX installed
+- Risk and order-state tests run without transport dependencies
+- Exchange-specific serialization can evolve independently
 
 ---
 

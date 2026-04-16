@@ -168,9 +168,8 @@ jobs:
 
     - name: Check formatting
       run: |
-        find include src tests benchmarks -name '*.cpp' -o -name '*.hpp' | \
-          xargs clang-format-18 --dry-run --Werror || \
-          echo "::warning::Code formatting issues detected. Run clang-format to fix."
+        find include src tests benchmarks \( -name '*.cpp' -o -name '*.hpp' \) -print | \
+          xargs clang-format-18 --dry-run --Werror
 
     - name: Static analysis with cppcheck
       run: |
@@ -179,5 +178,4 @@ jobs:
           --error-exitcode=1 \
           --inline-suppr \
           -I include \
-          src tests benchmarks 2>&1 || \
-          echo "::warning::Static analysis warnings detected."
+          src tests benchmarks
