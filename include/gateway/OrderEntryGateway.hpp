@@ -57,13 +57,13 @@ struct GatewayConfig {
     std::size_t maxOpenOrders{1000};
 
     /// Order timeout in nanoseconds
-    Timestamp orderTimeoutNanos{5'000'000'000};  // 5 seconds
+    Timestamp orderTimeoutNanos{5'000'000'000}; // 5 seconds
 
     /// Enable pre-trade risk checks
     bool enableRiskChecks{true};
 
     /// Maximum order value (price * quantity)
-    std::int64_t maxOrderValue{1'000'000'000'000};  // $10,000 at 8 decimals
+    std::int64_t maxOrderValue{1'000'000'000'000}; // $10,000 at 8 decimals
 
     /// Maximum position per symbol
     Quantity maxPositionPerSymbol{100'000};
@@ -83,20 +83,20 @@ struct GatewayConfig {
  * @brief Internal order representation with full state tracking.
  */
 struct alignas(CACHE_LINE_SIZE) InternalOrder {
-    OrderId     clientOrderId;    ///< Client-assigned order ID
-    OrderId     exchangeOrderId;  ///< Exchange-assigned order ID
-    SymbolId    symbolId;         ///< Instrument
-    std::string symbol;           ///< Symbol string
-    Side        side;             ///< Buy/Sell
-    Price       price;            ///< Limit price
-    Quantity    orderQty;         ///< Original quantity
-    Quantity    filledQty;        ///< Cumulative filled quantity
-    Quantity    remainingQty;     ///< Remaining quantity
-    OrderStatus status;           ///< Current status
-    OrderType   orderType;        ///< Order type
-    Timestamp   submitTime;       ///< When order was submitted
-    Timestamp   lastUpdateTime;   ///< Last status change
-    std::uint64_t strategyId;     ///< Originating strategy
+    OrderId     clientOrderId; ///< Client-assigned order ID
+    OrderId     exchangeOrderId; ///< Exchange-assigned order ID
+    SymbolId    symbolId; ///< Instrument
+    std::string symbol; ///< Symbol string
+    Side        side; ///< Buy/Sell
+    Price       price; ///< Limit price
+    Quantity    orderQty; ///< Original quantity
+    Quantity    filledQty; ///< Cumulative filled quantity
+    Quantity    remainingQty; ///< Remaining quantity
+    OrderStatus status; ///< Current status
+    OrderType   orderType; ///< Order type
+    Timestamp   submitTime; ///< When order was submitted
+    Timestamp   lastUpdateTime; ///< Last status change
+    std::uint64_t strategyId; ///< Originating strategy
 
     InternalOrder() noexcept = default;
 
@@ -125,13 +125,13 @@ struct ExecutionReport {
     OrderId     clientOrderId;
     OrderId     exchangeOrderId;
     OrderStatus status;
-    Price       lastPrice;        ///< Last fill price
-    Quantity    lastQty;          ///< Last fill quantity
-    Quantity    cumulativeQty;    ///< Total filled quantity
-    Quantity    leavesQty;        ///< Remaining quantity
-    Timestamp   transactTime;     ///< Exchange timestamp
-    int         rejectReason;     ///< Reason code if rejected
-    std::string text;             ///< Reject reason text
+    Price       lastPrice; ///< Last fill price
+    Quantity    lastQty; ///< Last fill quantity
+    Quantity    cumulativeQty; ///< Total filled quantity
+    Quantity    leavesQty; ///< Remaining quantity
+    Timestamp   transactTime; ///< Exchange timestamp
+    int         rejectReason; ///< Reason code if rejected
+    std::string text; ///< Reject reason text
 };
 
 //==============================================================================
@@ -650,7 +650,7 @@ public:
 
 private:
     [[nodiscard]] bool checkRateLimit(Timestamp now) noexcept {
-        constexpr Timestamp WINDOW_NANOS = 1'000'000'000;  // 1 second
+        constexpr Timestamp WINDOW_NANOS = 1'000'000'000; // 1 second
 
         while (m_orderTimeCount > 0 &&
                (now - m_orderTimes[m_orderTimeHead]) > WINDOW_NANOS) {

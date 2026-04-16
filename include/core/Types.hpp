@@ -124,8 +124,8 @@ enum class Side : std::uint8_t {
 enum class OrderType : std::uint8_t {
     Limit  = 0,
     Market = 1,
-    IOC    = 2,  // Immediate or Cancel
-    FOK    = 3   // Fill or Kill
+    IOC    = 2, // Immediate or Cancel
+    FOK    = 3 // Fill or Kill
 };
 
 /**

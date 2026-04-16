@@ -41,13 +41,13 @@ namespace hft {
  * to the order entry gateway for execution.
  */
 struct alignas(CACHE_LINE_SIZE) OrderRequest {
-    SymbolId  symbolId;         ///< Target instrument
-    Side      side;             ///< Buy or Sell
-    Price     price;            ///< Limit price (0 for market)
-    Quantity  quantity;         ///< Order quantity
-    OrderType orderType;        ///< Order type
-    Timestamp requestTime;      ///< Strategy signal timestamp
-    std::uint64_t strategyId;   ///< Originating strategy ID
+    SymbolId  symbolId; ///< Target instrument
+    Side      side; ///< Buy or Sell
+    Price     price; ///< Limit price (0 for market)
+    Quantity  quantity; ///< Order quantity
+    OrderType orderType; ///< Order type
+    Timestamp requestTime; ///< Strategy signal timestamp
+    std::uint64_t strategyId; ///< Originating strategy ID
 
     OrderRequest() noexcept = default;
 
@@ -128,21 +128,21 @@ private:
  */
 enum class Signal : std::int8_t {
     None       = 0,
-    BuySpot    = 1,    ///< Buy spot instrument
-    SellSpot   = -1,   ///< Sell spot instrument
-    BuyFuture  = 2,    ///< Buy futures contract
-    SellFuture = -2    ///< Sell futures contract
+    BuySpot    = 1, ///< Buy spot instrument
+    SellSpot   = -1, ///< Sell spot instrument
+    BuyFuture  = 2, ///< Buy futures contract
+    SellFuture = -2 ///< Sell futures contract
 };
 
 /**
  * @brief Strategy state machine states.
  */
 enum class StrategyState : std::uint8_t {
-    Idle       = 0,    ///< Not trading
-    Active     = 1,    ///< Actively generating signals
-    Paused     = 2,    ///< Temporarily paused
-    Stopped    = 3,    ///< Stopped, no trading
-    Error      = 4     ///< Error state
+    Idle       = 0, ///< Not trading
+    Active     = 1, ///< Actively generating signals
+    Paused     = 2, ///< Temporarily paused
+    Stopped    = 3, ///< Stopped, no trading
+    Error      = 4 ///< Error state
 };
 
 //==============================================================================
@@ -158,8 +158,8 @@ struct alignas(CACHE_LINE_SIZE) StrategyStats {
     std::atomic<std::uint64_t> ordersSubmitted{0};
     std::atomic<std::uint64_t> ordersFilled{0};
     std::atomic<std::uint64_t> ordersRejected{0};
-    std::atomic<std::int64_t> realizedPnl{0};       ///< Fixed-point P&L
-    std::atomic<std::int64_t> unrealizedPnl{0};     ///< Fixed-point P&L
+    std::atomic<std::int64_t> realizedPnl{0}; ///< Fixed-point P&L
+    std::atomic<std::int64_t> unrealizedPnl{0}; ///< Fixed-point P&L
 
     void reset() noexcept {
         ticksProcessed.store(0, std::memory_order_relaxed);
@@ -393,10 +393,10 @@ protected:
  * @brief Configuration for Cash and Carry arbitrage.
  */
 struct CashCarryConfig {
-    Price entryThreshold{priceFromDouble(0.001)};  ///< Min spread for entry (0.1%)
+    Price entryThreshold{priceFromDouble(0.001)}; ///< Min spread for entry (0.1%)
     Price exitThreshold{priceFromDouble(0.0002)}; ///< Exit when spread < this
-    Quantity defaultQty{100};                       ///< Default order size
-    Quantity maxPosition{1000};                     ///< Max position per leg
+    Quantity defaultQty{100}; ///< Default order size
+    Quantity maxPosition{1000}; ///< Max position per leg
     Timestamp maxHoldingPeriodNanos{300'000'000'000}; ///< 5 minutes
 };
 
@@ -494,7 +494,7 @@ public:
 
         if (futuresSpotSpread > m_config.entryThreshold) {
             // Profitable to: Buy Spot at Ask, Sell Futures at Bid
-            m_lastSignal = Signal::BuySpot;  // Will pair with SellFuture
+            m_lastSignal = Signal::BuySpot; // Will pair with SellFuture
             return Signal::BuySpot;
         }
 
@@ -508,7 +508,7 @@ public:
 
         if (spotFuturesSpread > m_config.entryThreshold) {
             // Profitable to: Sell Spot at Bid, Buy Futures at Ask
-            m_lastSignal = Signal::SellSpot;  // Will pair with BuyFuture
+            m_lastSignal = Signal::SellSpot; // Will pair with BuyFuture
             return Signal::SellSpot;
         }
 
@@ -517,8 +517,8 @@ public:
         //======================================================================
         if (m_spotPosition != 0) {
             Price currentBasis = (m_spotPosition > 0)
-                ? (m_futuresBid - m_spotAsk)   // Long spot, need to sell
-                : (m_spotBid - m_futuresAsk);  // Short spot, need to buy
+                ? (m_futuresBid - m_spotAsk) // Long spot, need to sell
+                : (m_spotBid - m_futuresAsk); // Short spot, need to buy
 
             if (currentBasis < m_config.exitThreshold) {
                 // Basis has collapsed, close position
@@ -554,40 +554,16 @@ public:
         switch (signal) {
             case Signal::BuySpot:
                 // Buy Spot at Ask
-                (void)orders.emplace_back(
-                    m_spotBook->symbolId(),
-                    Side::Buy,
-                    m_spotAsk,
-                    qty,
-                    OrderType::Limit
-                );
+                (void)orders.emplace_back(m_spotBook->symbolId(), Side::Buy, m_spotAsk, qty, OrderType::Limit);
                 // Sell Futures at Bid
-                (void)orders.emplace_back(
-                    m_futuresBook->symbolId(),
-                    Side::Sell,
-                    m_futuresBid,
-                    qty,
-                    OrderType::Limit
-                );
+                (void)orders.emplace_back(m_futuresBook->symbolId(), Side::Sell, m_futuresBid, qty, OrderType::Limit);
                 break;
 
             case Signal::SellSpot:
                 // Sell Spot at Bid
-                (void)orders.emplace_back(
-                    m_spotBook->symbolId(),
-                    Side::Sell,
-                    m_spotBid,
-                    qty,
-                    OrderType::Limit
-                );
+                (void)orders.emplace_back(m_spotBook->symbolId(), Side::Sell, m_spotBid, qty, OrderType::Limit);
                 // Buy Futures at Ask
-                (void)orders.emplace_back(
-                    m_futuresBook->symbolId(),
-                    Side::Buy,
-                    m_futuresAsk,
-                    qty,
-                    OrderType::Limit
-                );
+                (void)orders.emplace_back(m_futuresBook->symbolId(), Side::Buy, m_futuresAsk, qty, OrderType::Limit);
                 break;
 
             default:

@@ -81,10 +81,10 @@ enum class LogLevel : std::uint8_t {
 struct alignas(CACHE_LINE_SIZE) LogMessage {
     static constexpr std::size_t MAX_MSG_LEN = 200;
 
-    Timestamp   timestamp;                    ///< Nanoseconds since epoch
-    LogLevel    level;                        ///< Severity level
-    std::uint8_t msgLen;                       ///< Actual message length
-    char        message[MAX_MSG_LEN];         ///< Message buffer
+    Timestamp   timestamp; ///< Nanoseconds since epoch
+    LogLevel    level; ///< Severity level
+    std::uint8_t msgLen; ///< Actual message length
+    char        message[MAX_MSG_LEN]; ///< Message buffer
 
     LogMessage() noexcept = default;
 
@@ -168,7 +168,7 @@ public:
      */
     [[nodiscard]] bool log(LogLevel level, std::string_view msg) noexcept {
         if (level < m_minLevel.load(std::memory_order_relaxed)) [[likely]] {
-            return true;  // Filtered out, considered success
+            return true; // Filtered out, considered success
         }
 
         return m_queue.tryEmplace(level, msg);

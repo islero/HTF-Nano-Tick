@@ -54,12 +54,12 @@ namespace detail {
  * @brief Single order entry in the order book.
  */
 struct alignas(CACHE_LINE_SIZE) Order {
-    OrderId   orderId;        ///< Unique order identifier
-    Price     price;          ///< Limit price (fixed-point)
-    Quantity  quantity;       ///< Remaining quantity
-    Quantity  filledQty;      ///< Filled quantity
-    Side      side;           ///< Buy or Sell
-    Timestamp timestamp;      ///< Order entry time
+    OrderId   orderId; ///< Unique order identifier
+    Price     price; ///< Limit price (fixed-point)
+    Quantity  quantity; ///< Remaining quantity
+    Quantity  filledQty; ///< Filled quantity
+    Side      side; ///< Buy or Sell
+    Timestamp timestamp; ///< Order entry time
 
     constexpr Order() noexcept = default;
 
@@ -89,9 +89,9 @@ struct alignas(CACHE_LINE_SIZE) Order {
  * @brief Aggregated state for one price level.
  */
 struct PriceLevel {
-    Price    price{INVALID_PRICE};    ///< Price at this level
-    Quantity totalQty{0};             ///< Total quantity at this level
-    std::size_t orders{0};            ///< Number of FIFO orders at this level
+    Price    price{INVALID_PRICE}; ///< Price at this level
+    Quantity totalQty{0}; ///< Total quantity at this level
+    std::size_t orders{0}; ///< Number of FIFO orders at this level
 
     constexpr PriceLevel() noexcept = default;
     explicit constexpr PriceLevel(Price p) noexcept : price(p) {}
@@ -108,13 +108,13 @@ struct PriceLevel {
  * @brief Event emitted when order book state changes.
  */
 struct OrderBookUpdate {
-    MdMsgType  action;          ///< Add, Modify, Delete, Trade
-    Side       side;            ///< Affected side
-    Price      price;           ///< Affected price level
-    Quantity   quantity;        ///< New/changed quantity
+    MdMsgType  action; ///< Add, Modify, Delete, Trade
+    Side       side; ///< Affected side
+    Price      price; ///< Affected price level
+    Quantity   quantity; ///< New/changed quantity
     Quantity   totalQtyAtLevel; ///< Total quantity at price level after update
-    OrderId    orderId;         ///< Related order ID
-    Timestamp  timestamp;       ///< Event timestamp
+    OrderId    orderId; ///< Related order ID
+    Timestamp  timestamp; ///< Event timestamp
 };
 
 //==============================================================================

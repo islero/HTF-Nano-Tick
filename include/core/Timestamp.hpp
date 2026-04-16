@@ -208,7 +208,7 @@ private:
         m_nanosPerCycle = 1.0 / m_cyclesPerNano;
     }
 
-    double m_cyclesPerNano{3.0};  // Default ~3GHz
+    double m_cyclesPerNano{3.0}; // Default ~3GHz
     double m_nanosPerCycle{0.333};
 };
 

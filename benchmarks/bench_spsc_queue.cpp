@@ -29,7 +29,7 @@ static void BM_SPSCQueue_PushPop_SingleThread(benchmark::State& state) {
         benchmark::DoNotOptimize(value);
     }
 
-    state.SetItemsProcessed(state.iterations() * 2);  // 2 ops per iteration
+    state.SetItemsProcessed(state.iterations() * 2); // 2 ops per iteration
 }
 BENCHMARK(BM_SPSCQueue_PushPop_SingleThread);
 
@@ -156,7 +156,7 @@ static void BM_SPSCQueue_ElementSize(benchmark::State& state) {
     state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * 2 * static_cast<int64_t>(ElementSize));
 }
 BENCHMARK_TEMPLATE(BM_SPSCQueue_ElementSize, 8);
-BENCHMARK_TEMPLATE(BM_SPSCQueue_ElementSize, 64);   // Cache line
+BENCHMARK_TEMPLATE(BM_SPSCQueue_ElementSize, 64); // Cache line
 BENCHMARK_TEMPLATE(BM_SPSCQueue_ElementSize, 128);
 BENCHMARK_TEMPLATE(BM_SPSCQueue_ElementSize, 256);
 
@@ -224,7 +224,7 @@ BENCHMARK(BM_SPSCQueue_FrontPeek);
 // Empty check benchmark
 static void BM_SPSCQueue_EmptyCheck(benchmark::State& state) {
     SPSCQueue<int, 1024> queue;
-    (void)queue.tryPush(42);  // Not empty
+    (void)queue.tryPush(42); // Not empty
 
     for (auto _ : state) {
         bool empty = queue.empty();

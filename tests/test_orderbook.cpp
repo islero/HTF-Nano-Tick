@@ -60,7 +60,7 @@ TEST_F(OrderBookTest, AddSingleAskOrder) {
 TEST_F(OrderBookTest, AddMultipleBidLevels) {
     (void)book->addOrder(1, Side::Buy, priceFromDouble(100.50), 100);
     (void)book->addOrder(2, Side::Buy, priceFromDouble(100.45), 200);
-    (void)book->addOrder(3, Side::Buy, priceFromDouble(100.55), 150);  // Best bid
+    (void)book->addOrder(3, Side::Buy, priceFromDouble(100.55), 150); // Best bid
 
     EXPECT_EQ(book->orderCount(), 3);
     EXPECT_EQ(book->levelCount(Side::Buy), 3);
@@ -71,7 +71,7 @@ TEST_F(OrderBookTest, AddMultipleBidLevels) {
 TEST_F(OrderBookTest, AddMultipleAskLevels) {
     (void)book->addOrder(1, Side::Sell, priceFromDouble(100.60), 100);
     (void)book->addOrder(2, Side::Sell, priceFromDouble(100.65), 200);
-    (void)book->addOrder(3, Side::Sell, priceFromDouble(100.55), 150);  // Best ask
+    (void)book->addOrder(3, Side::Sell, priceFromDouble(100.55), 150); // Best ask
 
     EXPECT_EQ(book->orderCount(), 3);
     EXPECT_EQ(book->levelCount(Side::Sell), 3);
@@ -88,7 +88,7 @@ TEST_F(OrderBookTest, AddMultipleOrdersAtSamePrice) {
 
     EXPECT_EQ(book->orderCount(), 3);
     EXPECT_EQ(book->levelCount(Side::Buy), 1);
-    EXPECT_EQ(book->bestBidQty(), 450);  // 100 + 200 + 150
+    EXPECT_EQ(book->bestBidQty(), 450); // 100 + 200 + 150
 }
 
 //==============================================================================
@@ -112,7 +112,7 @@ TEST_F(OrderBookTest, ModifyOrderReduceQuantity) {
     (void)book->addOrder(2, Side::Buy, priceFromDouble(100.50), 200);
 
     EXPECT_TRUE(book->modifyOrder(1, 50));
-    EXPECT_EQ(book->bestBidQty(), 250);  // 50 + 200
+    EXPECT_EQ(book->bestBidQty(), 250); // 50 + 200
 }
 
 TEST_F(OrderBookTest, ModifyNonExistentOrderFails) {
@@ -138,7 +138,7 @@ TEST_F(OrderBookTest, DeleteOrder) {
 }
 
 TEST_F(OrderBookTest, DeleteOrderUpdatesBBO) {
-    (void)book->addOrder(1, Side::Buy, priceFromDouble(100.55), 100);  // Best
+    (void)book->addOrder(1, Side::Buy, priceFromDouble(100.55), 100); // Best
     (void)book->addOrder(2, Side::Buy, priceFromDouble(100.50), 200);
 
     EXPECT_EQ(book->bestBid(), priceFromDouble(100.55));
@@ -162,7 +162,7 @@ TEST_F(OrderBookTest, DeleteFromMultipleOrdersAtSamePrice) {
     EXPECT_TRUE(book->deleteOrder(2));
 
     EXPECT_EQ(book->orderCount(), 2);
-    EXPECT_EQ(book->bestBidQty(), 250);  // 100 + 150
+    EXPECT_EQ(book->bestBidQty(), 250); // 100 + 150
 }
 
 //==============================================================================
@@ -273,14 +273,8 @@ TEST_F(OrderBookTest, ApplySnapshot) {
     (void)book->addOrder(2, Side::Sell, priceFromDouble(100.60), 100);
 
     // Apply snapshot (should clear and rebuild)
-    std::vector<std::pair<Price, Quantity>> bids = {
-        {priceFromDouble(99.50), 500},
-        {priceFromDouble(99.40), 300}
-    };
-    std::vector<std::pair<Price, Quantity>> asks = {
-        {priceFromDouble(99.60), 400},
-        {priceFromDouble(99.70), 200}
-    };
+    std::vector<std::pair<Price, Quantity>> bids = {{priceFromDouble(99.50), 500}, {priceFromDouble(99.40), 300}};
+    std::vector<std::pair<Price, Quantity>> asks = {{priceFromDouble(99.60), 400}, {priceFromDouble(99.70), 200}};
 
     book->applySnapshot(bids, asks);
 

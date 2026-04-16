@@ -18,8 +18,8 @@
 #include <core/MemoryArena.hpp>
 #include <orderbook/OrderBook.hpp>
 #include <strategy/StrategyEngine.hpp>
-// #include <gateway/OrderEntryGateway.hpp>  // Disabled - requires QuickFIX
-// #include <market_data/MarketDataHandler.hpp>  // Disabled - requires QuickFIX
+// #include <gateway/OrderEntryGateway.hpp> // Disabled - requires QuickFIX
+// #include <market_data/MarketDataHandler.hpp> // Disabled - requires QuickFIX
 #include <utils/Logger.hpp>
 
 #include <iostream>
@@ -35,7 +35,7 @@ using namespace hft;
 void demonstrateOrderBook() {
     std::cout << "\n=== Order Book Demo ===\n";
 
-    DefaultOrderBook book(1);  // Symbol ID 1
+    DefaultOrderBook book(1); // Symbol ID 1
 
     // Add some orders
     (void)book.addOrder(1, Side::Buy, priceFromDouble(100.50), 100);
@@ -168,7 +168,7 @@ void demonstrateStrategy() {
     std::cout << "\n=== Cash-and-Carry Arbitrage Strategy Demo ===\n";
 
     // Create order books for spot and futures
-    DefaultOrderBook spotBook(1);   // BTCUSD Spot
+    DefaultOrderBook spotBook(1); // BTCUSD Spot
     DefaultOrderBook futuresBook(2); // BTCUSD Futures
 
     // Setup initial market state
@@ -188,7 +188,7 @@ void demonstrateStrategy() {
 
     // Create strategy with custom threshold
     CashCarryConfig config;
-    config.entryThreshold = priceFromDouble(50.0);  // $50 minimum spread
+    config.entryThreshold = priceFromDouble(50.0); // $50 minimum spread
     config.defaultQty = 1;
 
     CashCarryArbitrage strategy(&spotBook, &futuresBook, config, 1);

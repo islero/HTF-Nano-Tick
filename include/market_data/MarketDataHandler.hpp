@@ -72,15 +72,15 @@ struct MarketDataConfig {
  * the wire protocol (FIX, binary, etc.).
  */
 struct alignas(CACHE_LINE_SIZE) MarketDataMessage {
-    SymbolId   symbolId;          ///< Instrument symbol
-    SeqNum     seqNum;            ///< Exchange sequence number
-    Timestamp  sendingTime;       ///< Exchange timestamp (SendingTime)
-    Timestamp  receiveTime;       ///< Local receive timestamp
-    MdMsgType  msgType;           ///< Message type
-    Side       side;              ///< Bid/Ask for book updates
-    Price      price;             ///< Price
-    Quantity   quantity;          ///< Quantity
-    OrderId    orderId;           ///< Order ID (for order-level books)
+    SymbolId   symbolId; ///< Instrument symbol
+    SeqNum     seqNum; ///< Exchange sequence number
+    Timestamp  sendingTime; ///< Exchange timestamp (SendingTime)
+    Timestamp  receiveTime; ///< Local receive timestamp
+    MdMsgType  msgType; ///< Message type
+    Side       side; ///< Bid/Ask for book updates
+    Price      price; ///< Price
+    Quantity   quantity; ///< Quantity
+    OrderId    orderId; ///< Order ID (for order-level books)
 
     MarketDataMessage() noexcept = default;
 
@@ -407,7 +407,7 @@ public:
         MarketDataMessage msg;
         msg.symbolId = symbolId;
         msg.receiveTime = entry.receiveTime;
-        msg.sendingTime = entry.receiveTime;  // Use receive time as proxy
+        msg.sendingTime = entry.receiveTime; // Use receive time as proxy
         msg.price = entry.price;
         msg.quantity = entry.size;
 

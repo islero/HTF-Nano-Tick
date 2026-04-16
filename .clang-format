@@ -7,10 +7,12 @@ UseTab: Never
 AccessModifierOffset: -4
 ContinuationIndentWidth: 4
 ConstructorInitializerIndentWidth: 4
-ColumnLimit: 0
+ColumnLimit: 120
 PointerAlignment: Left
 ReferenceAlignment: Left
 SortIncludes: false
+IndentCaseLabels: true
+AlignTrailingComments: Never
 AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: All

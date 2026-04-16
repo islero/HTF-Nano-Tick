@@ -133,8 +133,7 @@ static void BM_OrderBook_DeepBook_Add(benchmark::State& state) {
 
         // Add orders across multiple price levels
         for (int64_t i = 0; i < numLevels; ++i) {
-            (void)book.addOrder(orderId++, Side::Buy,
-                         priceFromDouble(50000.0 - static_cast<double>(i)), 100);
+            (void)book.addOrder(orderId++, Side::Buy, priceFromDouble(50000.0 - static_cast<double>(i)), 100);
         }
     }
 

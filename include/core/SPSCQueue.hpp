@@ -228,7 +228,7 @@ public:
      * @return Maximum number of elements (Capacity - 1 usable).
      */
     [[nodiscard]] static constexpr std::size_t capacity() noexcept {
-        return Capacity - 1;  // One slot always empty to distinguish full/empty
+        return Capacity - 1; // One slot always empty to distinguish full/empty
     }
 
     /**
@@ -323,7 +323,7 @@ private:
     static void spinWait(std::size_t& spins) noexcept {
         if (++spins < MaxSpins) {
 #if defined(__x86_64__) || defined(_M_X64)
-            _mm_pause();  // CPU hint for spin-wait
+            _mm_pause(); // CPU hint for spin-wait
 #elif defined(__aarch64__)
             asm volatile("yield");
 #endif

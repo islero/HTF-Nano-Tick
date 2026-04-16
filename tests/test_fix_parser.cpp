@@ -107,7 +107,7 @@ TEST_F(QuickFixMessageTest, ParseExecutionReport_New) {
     report.set(FIX::OrderID("EX123456"));
     report.set(FIX::ExecID("EXEC001"));
     report.set(FIX::ExecType(qfix::EXEC_TYPE_NEW));
-    report.set(FIX::OrdStatus('0'));  // New
+    report.set(FIX::OrdStatus('0')); // New
     report.set(FIX::Symbol("BTCUSD"));
     report.set(FIX::Side(qfix::SIDE_BUY));
     report.set(FIX::LeavesQty(100));
@@ -129,7 +129,7 @@ TEST_F(QuickFixMessageTest, ParseExecutionReport_PartialFill) {
     report.set(FIX::OrderID("EX123456"));
     report.set(FIX::ExecID("EXEC002"));
     report.set(FIX::ExecType(qfix::EXEC_TYPE_PARTIAL_FILL));
-    report.set(FIX::OrdStatus('1'));  // Partially filled
+    report.set(FIX::OrdStatus('1')); // Partially filled
     report.set(FIX::Symbol("BTCUSD"));
     report.set(FIX::Side(qfix::SIDE_BUY));
     report.set(FIX::LastPx(50000.50));
@@ -157,7 +157,7 @@ TEST_F(QuickFixMessageTest, ParseExecutionReport_Fill) {
     report.set(FIX::OrderID("EX123456"));
     report.set(FIX::ExecID("EXEC003"));
     report.set(FIX::ExecType(qfix::EXEC_TYPE_FILL));
-    report.set(FIX::OrdStatus('2'));  // Filled
+    report.set(FIX::OrdStatus('2')); // Filled
     report.set(FIX::Symbol("BTCUSD"));
     report.set(FIX::Side(qfix::SIDE_BUY));
     report.set(FIX::LastPx(50000.50));
@@ -180,7 +180,7 @@ TEST_F(QuickFixMessageTest, ParseExecutionReport_Rejected) {
     report.set(FIX::ClOrdID("12345"));
     report.set(FIX::ExecID("EXEC004"));
     report.set(FIX::ExecType(qfix::EXEC_TYPE_REJECTED));
-    report.set(FIX::OrdStatus('8'));  // Rejected
+    report.set(FIX::OrdStatus('8')); // Rejected
     report.set(FIX::Symbol("BTCUSD"));
     report.set(FIX::Side(qfix::SIDE_BUY));
     report.set(FIX::LeavesQty(0));
@@ -414,9 +414,9 @@ TEST_F(QuickFixMessageTest, MessageToString) {
     std::string msgStr = order.toString();
 
     // Message should contain key fields
-    EXPECT_NE(msgStr.find("35=D"), std::string::npos);  // MsgType
-    EXPECT_NE(msgStr.find("11=12345"), std::string::npos);  // ClOrdID
-    EXPECT_NE(msgStr.find("55=BTCUSD"), std::string::npos);  // Symbol
+    EXPECT_NE(msgStr.find("35=D"), std::string::npos); // MsgType
+    EXPECT_NE(msgStr.find("11=12345"), std::string::npos); // ClOrdID
+    EXPECT_NE(msgStr.find("55=BTCUSD"), std::string::npos); // Symbol
 }
 
 //==============================================================================

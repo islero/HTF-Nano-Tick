@@ -94,7 +94,7 @@ TEST_F(SPSCQueueTest, FillQueue) {
     }
 
     EXPECT_TRUE(queue.full());
-    EXPECT_FALSE(queue.tryPush(999));  // Queue full
+    EXPECT_FALSE(queue.tryPush(999)); // Queue full
 }
 
 TEST_F(SPSCQueueTest, FillAndDrainQueue) {
@@ -195,7 +195,7 @@ TEST_F(SPSCQueueTest, SingleProducerSingleConsumer) {
     });
 
     std::thread consumer([this, &producerDone]() {
-        constexpr int NUM_ITEMS_LOCAL = NUM_ITEMS;  // Avoid capture
+        constexpr int NUM_ITEMS_LOCAL = NUM_ITEMS; // Avoid capture
         int expected = 0;
         while (expected < NUM_ITEMS_LOCAL) {
             int value;

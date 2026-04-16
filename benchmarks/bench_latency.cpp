@@ -67,7 +67,7 @@ static void BM_LatencyHistogram_Record(benchmark::State& state) {
     DefaultLatencyHistogram histogram;
 
     for (auto _ : state) {
-        histogram.record(1000);  // 1 microsecond
+        histogram.record(1000); // 1 microsecond
     }
     state.SetItemsProcessed(state.iterations());
 }

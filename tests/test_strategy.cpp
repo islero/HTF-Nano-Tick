@@ -18,14 +18,12 @@ protected:
         spotBook = std::make_unique<DefaultOrderBook>(1);
         futuresBook = std::make_unique<DefaultOrderBook>(2);
 
-        config.entryThreshold = priceFromDouble(50.0);  // $50
-        config.exitThreshold = priceFromDouble(5.0);    // $5
+        config.entryThreshold = priceFromDouble(50.0); // $50
+        config.exitThreshold = priceFromDouble(5.0); // $5
         config.defaultQty = 10;
         config.maxPosition = 100;
 
-        strategy = std::make_unique<CashCarryArbitrage>(
-            spotBook.get(), futuresBook.get(), config, 1
-        );
+        strategy = std::make_unique<CashCarryArbitrage>(spotBook.get(), futuresBook.get(), config, 1);
     }
 
     void setupNormalMarket() {
@@ -114,7 +112,7 @@ TEST_F(CashCarryStrategyTest, NoSignalWhenNotInitialized) {
 }
 
 TEST_F(CashCarryStrategyTest, NoSignalWhenBelowThreshold) {
-    setupNormalMarket();  // Basis = $10, threshold = $50
+    setupNormalMarket(); // Basis = $10, threshold = $50
     (void)strategy->initialize();
 
     OrderBookUpdate update;
@@ -142,7 +140,7 @@ TEST_F(CashCarryStrategyTest, NoSignalWithEmptyBooks) {
 //==============================================================================
 
 TEST_F(CashCarryStrategyTest, GenerateSignalForCashAndCarry) {
-    setupArbitrageOpportunity();  // Futures premium = $90
+    setupArbitrageOpportunity(); // Futures premium = $90
     (void)strategy->initialize();
 
     OrderBookUpdate update;
@@ -169,7 +167,7 @@ TEST_F(CashCarryStrategyTest, GenerateSignalForCashAndCarry) {
 }
 
 TEST_F(CashCarryStrategyTest, GenerateSignalForReverseCashAndCarry) {
-    setupReverseArbitrageOpportunity();  // Spot premium = $90
+    setupReverseArbitrageOpportunity(); // Spot premium = $90
     (void)strategy->initialize();
 
     OrderBookUpdate update;
@@ -229,7 +227,7 @@ TEST_F(CashCarryStrategyTest, PositionUpdatedOnFill) {
     update.action = MdMsgType::Add;
     update.side = Side::Sell;
     auto orders = strategy->onMarketData(update);
-    ASSERT_FALSE(orders.empty());  // Verify signal was generated
+    ASSERT_FALSE(orders.empty()); // Verify signal was generated
 
     // Now simulate fill (updates positions based on last signal)
     strategy->handleOrderFill(1, priceFromDouble(50010.0), 10);

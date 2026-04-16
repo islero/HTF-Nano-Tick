@@ -85,12 +85,12 @@ inline constexpr char EXEC_TYPE_REJECTED        = '8';
  * @brief Normalized market data entry extracted from QuickFIX message.
  */
 struct QuickFixMdEntry {
-    char       entryType;      ///< '0'=Bid, '1'=Ask, '2'=Trade
-    char       updateAction;   ///< '0'=New, '1'=Change, '2'=Delete
-    Price      price;          ///< Price
-    Quantity   size;           ///< Size
-    std::string entryId;       ///< Entry ID (if provided)
-    Timestamp  receiveTime;    ///< Local receive timestamp
+    char       entryType; ///< '0'=Bid, '1'=Ask, '2'=Trade
+    char       updateAction; ///< '0'=New, '1'=Change, '2'=Delete
+    Price      price; ///< Price
+    Quantity   size; ///< Size
+    std::string entryId; ///< Entry ID (if provided)
+    Timestamp  receiveTime; ///< Local receive timestamp
 };
 
 //==============================================================================
@@ -101,16 +101,16 @@ struct QuickFixMdEntry {
  * @brief Normalized execution report extracted from QuickFIX message.
  */
 struct QuickFixExecReport {
-    OrderId     clOrdId;           ///< Client order ID
-    OrderId     orderId;           ///< Exchange order ID
-    char        execType;          ///< Execution type
-    OrderStatus status;            ///< Order status
-    Price       lastPx;            ///< Last fill price
-    Quantity    lastQty;           ///< Last fill quantity
-    Quantity    cumQty;            ///< Cumulative filled quantity
-    Quantity    leavesQty;         ///< Remaining quantity
-    std::string text;              ///< Reject reason text
-    Timestamp   receiveTime;       ///< Local receive timestamp
+    OrderId     clOrdId; ///< Client order ID
+    OrderId     orderId; ///< Exchange order ID
+    char        execType; ///< Execution type
+    OrderStatus status; ///< Order status
+    Price       lastPx; ///< Last fill price
+    Quantity    lastQty; ///< Last fill quantity
+    Quantity    cumQty; ///< Cumulative filled quantity
+    Quantity    leavesQty; ///< Remaining quantity
+    std::string text; ///< Reject reason text
+    Timestamp   receiveTime; ///< Local receive timestamp
 };
 
 //==============================================================================
@@ -332,7 +332,7 @@ public:
 
         request.set(FIX::MDReqID(mdReqId));
         request.set(FIX::SubscriptionRequestType(subscriptionType));
-        request.set(FIX::MarketDepth(0));  // Full book
+        request.set(FIX::MarketDepth(0)); // Full book
 
         // Add MD entry types
         FIX44::MarketDataRequest::NoMDEntryTypes entryTypesGroup;
@@ -436,7 +436,7 @@ private:
 
             QuickFixMdEntry entry;
             entry.receiveTime = receiveTime;
-            entry.updateAction = qfix::MD_ACTION_NEW;  // Snapshot implies new
+            entry.updateAction = qfix::MD_ACTION_NEW; // Snapshot implies new
 
             FIX::MDEntryType entryType;
             group.get(entryType);
@@ -590,14 +590,14 @@ private:
         if (m_mdCallback) {
             m_mdCallback(entry);
         }
-        m_mdQueue.tryPush(entry);  // Best effort
+        m_mdQueue.tryPush(entry); // Best effort
     }
 
     void enqueueExecutionReport(const QuickFixExecReport& report) {
         if (m_execCallback) {
             m_execCallback(report);
         }
-        m_execQueue.tryPush(report);  // Best effort
+        m_execQueue.tryPush(report); // Best effort
     }
 
     bool sendMessage(FIX::Message& message) {
