@@ -33,6 +33,7 @@
 #include <unordered_map>
 #include <functional>
 #include <atomic>
+#include <string>
 
 namespace hft {
 
@@ -174,6 +175,7 @@ public:
     MarketDataHandler(const MarketDataHandler&) = delete;
     MarketDataHandler& operator=(const MarketDataHandler&) = delete;
 
+#ifdef HFT_ENABLE_QUICKFIX
     //==========================================================================
     // QuickFIX Message Processing
     //==========================================================================
@@ -428,6 +430,7 @@ public:
         static_cast<Derived*>(this)->onMarketDataUpdate(msg);
         return true;
     }
+#endif
 
     /**
      * @brief Enqueue a message for async processing.
@@ -519,7 +522,9 @@ protected:
                             [[maybe_unused]] SeqNum lastSeq,
                             [[maybe_unused]] SeqNum newSeq) noexcept {}
 
+#ifdef HFT_ENABLE_QUICKFIX
     void onSnapshot([[maybe_unused]] const FIX44::MarketDataSnapshotFullRefresh& message) noexcept {}
+#endif
 
     void onIncrementalEntry([[maybe_unused]] const MarketDataMessage& msg) noexcept {}
 
@@ -591,13 +596,13 @@ public:
     // CRTP implementations
     void onStaleMessage(const MarketDataMessage& msg, Timestamp latency) noexcept {
         // Log stale message (could be throttled in production)
-        HFT_LOG_WARN("Stale market data detected");
+        (void)HFT_LOG_WARN("Stale market data detected");
         (void)msg;
         (void)latency;
     }
 
     void onSequenceGap(SymbolId symbolId, SeqNum lastSeq, SeqNum newSeq) noexcept {
-        HFT_LOG_WARN("Sequence gap detected");
+        (void)HFT_LOG_WARN("Sequence gap detected");
         (void)symbolId;
         (void)lastSeq;
         (void)newSeq;
@@ -611,15 +616,15 @@ public:
 
         switch (msg.msgType) {
             case MdMsgType::Add:
-                book->addOrder(msg.orderId, msg.side, msg.price, msg.quantity);
+                (void)book->addOrder(msg.orderId, msg.side, msg.price, msg.quantity);
                 break;
 
             case MdMsgType::Modify:
-                book->modifyOrder(msg.orderId, msg.quantity);
+                (void)book->modifyOrder(msg.orderId, msg.quantity);
                 break;
 
             case MdMsgType::Delete:
-                book->deleteOrder(msg.orderId);
+                (void)book->deleteOrder(msg.orderId);
                 break;
 
             default:

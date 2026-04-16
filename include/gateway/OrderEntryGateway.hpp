@@ -31,7 +31,10 @@
 #include <unordered_set>
 #include <functional>
 #include <atomic>
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <limits>
 #include <string>
 
 namespace hft {
@@ -132,6 +135,36 @@ struct ExecutionReport {
 };
 
 //==============================================================================
+// Native Outbound Order Message
+//==============================================================================
+
+/**
+ * @brief Protocol-neutral outbound order command.
+ *
+ * Gateways can translate this object to FIX, OUCH, binary native protocols, or a
+ * simulator without making the core order manager depend on a transport library.
+ */
+enum class OutboundOrderAction : std::uint8_t {
+    New = 0,
+    Cancel = 1,
+    Replace = 2
+};
+
+struct OutboundOrderMessage {
+    OutboundOrderAction action{OutboundOrderAction::New};
+    OrderId clientOrderId{INVALID_ORDER_ID};
+    OrderId origClientOrderId{INVALID_ORDER_ID};
+    OrderId exchangeOrderId{INVALID_ORDER_ID};
+    SymbolId symbolId{0};
+    std::string symbol;
+    Side side{Side::Buy};
+    Price price{INVALID_PRICE};
+    Quantity quantity{0};
+    OrderType orderType{OrderType::Limit};
+    Timestamp transactTime{0};
+};
+
+//==============================================================================
 // Gateway Statistics
 //==============================================================================
 
@@ -178,11 +211,13 @@ struct alignas(CACHE_LINE_SIZE) GatewayStats {
 template <std::size_t QueueCapacity = 4096>
 class OrderEntryGateway {
 public:
+    static_assert(QueueCapacity > 0, "QueueCapacity must be greater than zero");
+
     /// Callback for order status updates
     using OrderCallback = std::function<void(const InternalOrder&)>;
 
-    /// Callback for sending FIX messages
-    using SendCallback = std::function<bool(FIX::Message&)>;
+    /// Callback for sending protocol-neutral outbound order messages
+    using SendCallback = std::function<bool(const OutboundOrderMessage&)>;
 
     /**
      * @brief Construct order entry gateway.
@@ -259,27 +294,18 @@ public:
         // Update position tracking
         updatePositionOnOrder(request);
 
-        //======================================================================
-        // Build and Send FIX Message using QuickFIX
-        //======================================================================
         if (m_sendCallback) {
-            FIX44::NewOrderSingle newOrder;
-
-            // Required fields
-            newOrder.set(FIX::ClOrdID(std::to_string(orderId)));
-            newOrder.set(FIX::Symbol(order.symbol));
-            newOrder.set(FIX::Side(request.side == Side::Buy ? qfix::SIDE_BUY : qfix::SIDE_SELL));
-            newOrder.set(FIX::TransactTime(FIX::UtcTimeStamp()));
-            newOrder.set(FIX::OrdType(qfix::ORD_TYPE_LIMIT));
-
-            // Price and quantity
-            newOrder.set(FIX::Price(priceToDouble(request.price)));
-            newOrder.set(FIX::OrderQty(static_cast<double>(request.quantity)));
-
-            // Time in force
-            newOrder.set(FIX::TimeInForce(qfix::TIF_DAY));
-
-            m_sendCallback(newOrder);
+            OutboundOrderMessage message;
+            message.action = OutboundOrderAction::New;
+            message.clientOrderId = orderId;
+            message.symbolId = request.symbolId;
+            message.symbol = order.symbol;
+            message.side = request.side;
+            message.price = request.price;
+            message.quantity = request.quantity;
+            message.orderType = request.orderType;
+            message.transactTime = now;
+            (void)m_sendCallback(message);
         }
 
         m_stats.ordersSubmitted.fetch_add(1, std::memory_order_relaxed);
@@ -311,23 +337,19 @@ public:
         order.status = OrderStatus::PendingCancel;
         order.lastUpdateTime = nowNanos();
 
-        // Build and send cancel request using QuickFIX
         if (m_sendCallback) {
             OrderId cancelId = m_nextOrderId.fetch_add(1, std::memory_order_relaxed);
 
-            FIX44::OrderCancelRequest cancel;
-
-            cancel.set(FIX::ClOrdID(std::to_string(cancelId)));
-            cancel.set(FIX::OrigClOrdID(std::to_string(orderId)));
-            cancel.set(FIX::Symbol(order.symbol));
-            cancel.set(FIX::Side(order.side == Side::Buy ? qfix::SIDE_BUY : qfix::SIDE_SELL));
-            cancel.set(FIX::TransactTime(FIX::UtcTimeStamp()));
-
-            if (order.exchangeOrderId != INVALID_ORDER_ID) {
-                cancel.set(FIX::OrderID(std::to_string(order.exchangeOrderId)));
-            }
-
-            m_sendCallback(cancel);
+            OutboundOrderMessage message;
+            message.action = OutboundOrderAction::Cancel;
+            message.clientOrderId = cancelId;
+            message.origClientOrderId = orderId;
+            message.exchangeOrderId = order.exchangeOrderId;
+            message.symbolId = order.symbolId;
+            message.symbol = order.symbol;
+            message.side = order.side;
+            message.transactTime = order.lastUpdateTime;
+            (void)m_sendCallback(message);
         }
 
         return true;
@@ -354,26 +376,20 @@ public:
 
         OrderId newOrderId = m_nextOrderId.fetch_add(1, std::memory_order_relaxed);
 
-        // Build and send replace request using QuickFIX
         if (m_sendCallback) {
-            FIX44::OrderCancelReplaceRequest replace;
-
-            replace.set(FIX::ClOrdID(std::to_string(newOrderId)));
-            replace.set(FIX::OrigClOrdID(std::to_string(orderId)));
-            replace.set(FIX::Symbol(order.symbol));
-            replace.set(FIX::Side(order.side == Side::Buy ? qfix::SIDE_BUY : qfix::SIDE_SELL));
-            replace.set(FIX::TransactTime(FIX::UtcTimeStamp()));
-            replace.set(FIX::OrdType(qfix::ORD_TYPE_LIMIT));
-
-            // Use new values or original
-            replace.set(FIX::Price(priceToDouble(newPrice > 0 ? newPrice : order.price)));
-            replace.set(FIX::OrderQty(static_cast<double>(newQty > 0 ? newQty : order.orderQty)));
-
-            if (order.exchangeOrderId != INVALID_ORDER_ID) {
-                replace.set(FIX::OrderID(std::to_string(order.exchangeOrderId)));
-            }
-
-            m_sendCallback(replace);
+            OutboundOrderMessage message;
+            message.action = OutboundOrderAction::Replace;
+            message.clientOrderId = newOrderId;
+            message.origClientOrderId = orderId;
+            message.exchangeOrderId = order.exchangeOrderId;
+            message.symbolId = order.symbolId;
+            message.symbol = order.symbol;
+            message.side = order.side;
+            message.price = newPrice > 0 ? newPrice : order.price;
+            message.quantity = newQty > 0 ? newQty : order.orderQty;
+            message.orderType = order.orderType;
+            message.transactTime = nowNanos();
+            (void)m_sendCallback(message);
         }
 
         return newOrderId;
@@ -461,10 +477,9 @@ public:
         }
     }
 
+#ifdef HFT_ENABLE_QUICKFIX
     /**
      * @brief Process a QuickFIX execution report message.
-     *
-     * @param message QuickFIX ExecutionReport message.
      */
     void onExecutionReport(const FIX44::ExecutionReport& message) noexcept {
         ExecutionReport report;
@@ -543,8 +558,6 @@ public:
 
     /**
      * @brief Process a QuickFixExecReport from the application queue.
-     *
-     * @param qfReport QuickFIX execution report from application.
      */
     void onExecutionReport(const QuickFixExecReport& qfReport) noexcept {
         ExecutionReport report;
@@ -559,6 +572,7 @@ public:
 
         onExecutionReport(report);
     }
+#endif
 
     //==========================================================================
     // Order Queries
@@ -636,37 +650,35 @@ public:
 
 private:
     [[nodiscard]] bool checkRateLimit(Timestamp now) noexcept {
-        // Simple sliding window rate limiter
         constexpr Timestamp WINDOW_NANOS = 1'000'000'000;  // 1 second
 
-        // Clean old entries
-        while (!m_orderTimes.empty() &&
-               (now - m_orderTimes.front()) > WINDOW_NANOS) {
-            m_orderTimes.erase(m_orderTimes.begin());
+        while (m_orderTimeCount > 0 &&
+               (now - m_orderTimes[m_orderTimeHead]) > WINDOW_NANOS) {
+            m_orderTimeHead = (m_orderTimeHead + 1U) % QueueCapacity;
+            --m_orderTimeCount;
         }
 
-        if (m_orderTimes.size() >= m_config.maxOrdersPerSecond) {
+        const std::size_t limit = std::min<std::size_t>(m_config.maxOrdersPerSecond, QueueCapacity);
+        if (m_orderTimeCount >= limit) {
             return false;
         }
 
-        m_orderTimes.push_back(now);
+        const std::size_t tail = (m_orderTimeHead + m_orderTimeCount) % QueueCapacity;
+        m_orderTimes[tail] = now;
+        ++m_orderTimeCount;
         return true;
     }
 
     [[nodiscard]] bool passesRiskChecks(const OrderRequest& request) const noexcept {
-        // Check order value
-        std::int64_t orderValue = request.price * request.quantity / PRICE_MULTIPLIER;
-        if (orderValue > m_config.maxOrderValue) {
+        if (request.price <= 0 || request.quantity <= 0) {
             return false;
         }
 
-        // Check position limits
-        auto it = m_positions.find(request.symbolId);
-        Quantity currentPos = (it != m_positions.end()) ? it->second : 0;
-        Quantity newPos = currentPos + (request.side == Side::Buy ? 1 : -1) *
-                          static_cast<Quantity>(request.quantity);
+        if (exceedsMaxOrderValue(request.price, request.quantity, m_config.maxOrderValue)) {
+            return false;
+        }
 
-        if (std::abs(newPos) > m_config.maxPositionPerSymbol) {
+        if (wouldExceedPositionLimit(request)) {
             return false;
         }
 
@@ -681,6 +693,54 @@ private:
         }
 
         return true;
+    }
+
+    [[nodiscard]] bool exceedsMaxOrderValue(Price price, Quantity quantity,
+                                            std::int64_t maxOrderValue) const noexcept {
+#if defined(__SIZEOF_INT128__)
+        const __int128 notional = static_cast<__int128>(price) * static_cast<__int128>(quantity);
+        const __int128 limit = static_cast<__int128>(maxOrderValue) *
+                               static_cast<__int128>(PRICE_MULTIPLIER);
+        return notional > limit;
+#else
+        const long double notional = static_cast<long double>(price) *
+                                     static_cast<long double>(quantity);
+        const long double limit = static_cast<long double>(maxOrderValue) *
+                                  static_cast<long double>(PRICE_MULTIPLIER);
+        return notional > limit;
+#endif
+    }
+
+    [[nodiscard]] bool wouldExceedPositionLimit(const OrderRequest& request) const noexcept {
+        const Quantity currentPos = getMappedQuantity(m_positions, request.symbolId);
+        const Quantity pendingPos = getMappedQuantity(m_pendingPositions, request.symbolId);
+
+#if defined(__SIZEOF_INT128__)
+        const __int128 signedQty = request.side == Side::Buy
+            ? static_cast<__int128>(request.quantity)
+            : -static_cast<__int128>(request.quantity);
+        __int128 exposure = static_cast<__int128>(currentPos) +
+                            static_cast<__int128>(pendingPos) +
+                            signedQty;
+        if (exposure < 0) {
+            exposure = -exposure;
+        }
+        return exposure > static_cast<__int128>(m_config.maxPositionPerSymbol);
+#else
+        const long double signedQty = request.side == Side::Buy
+            ? static_cast<long double>(request.quantity)
+            : -static_cast<long double>(request.quantity);
+        const long double exposure = std::abs(static_cast<long double>(currentPos) +
+                                              static_cast<long double>(pendingPos) +
+                                              signedQty);
+        return exposure > static_cast<long double>(m_config.maxPositionPerSymbol);
+#endif
+    }
+
+    [[nodiscard]] static Quantity getMappedQuantity(
+        const std::unordered_map<SymbolId, Quantity>& map, SymbolId symbolId) noexcept {
+        auto it = map.find(symbolId);
+        return it != map.end() ? it->second : 0;
     }
 
     void updatePositionOnOrder(const OrderRequest& request) noexcept {
@@ -741,7 +801,9 @@ private:
     std::unordered_map<SymbolId, Quantity> m_pendingPositions;
 
     // Rate limiting
-    std::vector<Timestamp> m_orderTimes;
+    std::array<Timestamp, QueueCapacity> m_orderTimes{};
+    std::size_t m_orderTimeHead{0};
+    std::size_t m_orderTimeCount{0};
 
     // Callbacks
     OrderCallback m_orderCallback;
