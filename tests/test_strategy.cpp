@@ -192,6 +192,27 @@ TEST_F(CashCarryStrategyTest, GenerateSignalForReverseCashAndCarry) {
     EXPECT_EQ(orders[1].price, futuresBook->bestAsk());
 }
 
+TEST_F(CashCarryStrategyTest, GenerateOrdersIntoFixedBatch) {
+    setupArbitrageOpportunity();
+    (void)strategy->initialize();
+
+    StrategyBase<CashCarryArbitrage>::OrderBatch orders;
+    OrderBookUpdate update;
+    update.action = MdMsgType::Add;
+    update.side = Side::Sell;
+
+    std::size_t generated = strategy->onMarketDataInto(update, orders);
+
+    ASSERT_EQ(generated, 2u);
+    ASSERT_EQ(orders.size(), 2u);
+    EXPECT_EQ(orders[0].symbolId, spotBook->symbolId());
+    EXPECT_EQ(orders[0].side, Side::Buy);
+    EXPECT_EQ(orders[1].symbolId, futuresBook->symbolId());
+    EXPECT_EQ(orders[1].side, Side::Sell);
+    EXPECT_EQ(orders[0].strategyId, strategy->strategyId());
+    EXPECT_EQ(orders[1].strategyId, strategy->strategyId());
+}
+
 //==============================================================================
 // Position Tracking
 //==============================================================================

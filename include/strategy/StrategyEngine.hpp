@@ -23,7 +23,10 @@
 #include "../orderbook/OrderBook.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace hft {
 
@@ -58,6 +61,62 @@ struct alignas(CACHE_LINE_SIZE) OrderRequest {
         , requestTime(nowNanos())
         , strategyId(0)
     {}
+};
+
+//==============================================================================
+// Fixed-Capacity Order Batch
+//==============================================================================
+
+/**
+ * @brief Small fixed-capacity container for strategy-generated orders.
+ *
+ * This is the hot-path strategy output type. It avoids heap allocation while
+ * preserving the minimal vector-like API used by strategies and tests.
+ */
+template <std::size_t Capacity>
+class OrderRequestBatch {
+public:
+    static_assert(Capacity > 0, "Capacity must be greater than zero");
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept { return m_size; }
+    [[nodiscard]] constexpr bool empty() const noexcept { return m_size == 0; }
+    [[nodiscard]] static constexpr std::size_t capacity() noexcept { return Capacity; }
+
+    void clear() noexcept { m_size = 0; }
+
+    [[nodiscard]] bool push_back(const OrderRequest& request) noexcept {
+        if (m_size >= Capacity) [[unlikely]] {
+            return false;
+        }
+        m_orders[m_size++] = request;
+        return true;
+    }
+
+    template <typename... Args>
+    [[nodiscard]] bool emplace_back(Args&&... args) noexcept {
+        if (m_size >= Capacity) [[unlikely]] {
+            return false;
+        }
+        m_orders[m_size++] = OrderRequest(std::forward<Args>(args)...);
+        return true;
+    }
+
+    [[nodiscard]] OrderRequest& operator[](std::size_t index) noexcept {
+        return m_orders[index];
+    }
+
+    [[nodiscard]] const OrderRequest& operator[](std::size_t index) const noexcept {
+        return m_orders[index];
+    }
+
+    [[nodiscard]] OrderRequest* begin() noexcept { return m_orders.data(); }
+    [[nodiscard]] OrderRequest* end() noexcept { return m_orders.data() + m_size; }
+    [[nodiscard]] const OrderRequest* begin() const noexcept { return m_orders.data(); }
+    [[nodiscard]] const OrderRequest* end() const noexcept { return m_orders.data() + m_size; }
+
+private:
+    std::array<OrderRequest, Capacity> m_orders{};
+    std::size_t m_size{0};
 };
 
 //==============================================================================
@@ -134,6 +193,9 @@ struct alignas(CACHE_LINE_SIZE) StrategyStats {
 template <typename Derived>
 class StrategyBase {
 public:
+    static constexpr std::size_t MAX_ORDERS_PER_SIGNAL = 4;
+    using OrderBatch = OrderRequestBatch<MAX_ORDERS_PER_SIGNAL>;
+
     /**
      * @brief Construct strategy base.
      * @param strategyId Unique strategy identifier.
@@ -218,11 +280,13 @@ public:
      * @param update Order book update.
      * @return Generated order requests (may be empty).
      */
-    std::vector<OrderRequest> onMarketData(const OrderBookUpdate& update) noexcept {
-        std::vector<OrderRequest> orders;
+    template <std::size_t Capacity>
+    std::size_t onMarketDataInto(const OrderBookUpdate& update,
+                                 OrderRequestBatch<Capacity>& orders) noexcept {
+        orders.clear();
 
         if (m_state != StrategyState::Active) [[unlikely]] {
-            return orders;
+            return 0;
         }
 
         m_stats.ticksProcessed.fetch_add(1, std::memory_order_relaxed);
@@ -236,8 +300,8 @@ public:
         if (signal != Signal::None) {
             m_stats.signalsGenerated.fetch_add(1, std::memory_order_relaxed);
 
-            // CRTP: Generate order(s) from signal
-            orders = static_cast<Derived*>(this)->generateOrders(signal);
+            // CRTP: Generate order(s) from signal into caller-provided storage
+            static_cast<Derived*>(this)->generateOrdersInto(signal, orders);
 
             for (auto& order : orders) {
                 order.strategyId = m_strategyId;
@@ -245,6 +309,24 @@ public:
             }
         }
 
+        return orders.size();
+    }
+
+    /**
+     * @brief Compatibility wrapper that returns std::vector for existing callers.
+     *
+     * Production hot paths should call onMarketDataInto() with caller-owned
+     * storage to avoid heap allocation.
+     */
+    std::vector<OrderRequest> onMarketData(const OrderBookUpdate& update) noexcept {
+        OrderBatch batch;
+        (void)onMarketDataInto(update, batch);
+
+        std::vector<OrderRequest> orders;
+        orders.reserve(batch.size());
+        for (const auto& order : batch) {
+            orders.push_back(order);
+        }
         return orders;
     }
 
@@ -289,6 +371,9 @@ protected:
     void onTick([[maybe_unused]] const OrderBookUpdate& update) noexcept {}
     Signal computeSignal() noexcept { return Signal::None; }
     std::vector<OrderRequest> generateOrders([[maybe_unused]] Signal signal) noexcept { return {}; }
+    template <std::size_t Capacity>
+    void generateOrdersInto([[maybe_unused]] Signal signal,
+                            [[maybe_unused]] OrderRequestBatch<Capacity>& orders) noexcept {}
     void onOrderFill([[maybe_unused]] OrderId orderId,
                      [[maybe_unused]] Price fillPrice,
                      [[maybe_unused]] Quantity fillQty) noexcept {}
@@ -462,16 +547,14 @@ public:
      * @param signal Trading signal.
      * @return Vector of order requests (typically 2 for arb).
      */
-    std::vector<OrderRequest> generateOrders(Signal signal) noexcept {
-        std::vector<OrderRequest> orders;
-        orders.reserve(2);
-
+    template <std::size_t Capacity>
+    void generateOrdersInto(Signal signal, OrderRequestBatch<Capacity>& orders) noexcept {
         Quantity qty = m_config.defaultQty;
 
         switch (signal) {
             case Signal::BuySpot:
                 // Buy Spot at Ask
-                orders.emplace_back(
+                (void)orders.emplace_back(
                     m_spotBook->symbolId(),
                     Side::Buy,
                     m_spotAsk,
@@ -479,7 +562,7 @@ public:
                     OrderType::Limit
                 );
                 // Sell Futures at Bid
-                orders.emplace_back(
+                (void)orders.emplace_back(
                     m_futuresBook->symbolId(),
                     Side::Sell,
                     m_futuresBid,
@@ -490,7 +573,7 @@ public:
 
             case Signal::SellSpot:
                 // Sell Spot at Bid
-                orders.emplace_back(
+                (void)orders.emplace_back(
                     m_spotBook->symbolId(),
                     Side::Sell,
                     m_spotBid,
@@ -498,7 +581,7 @@ public:
                     OrderType::Limit
                 );
                 // Buy Futures at Ask
-                orders.emplace_back(
+                (void)orders.emplace_back(
                     m_futuresBook->symbolId(),
                     Side::Buy,
                     m_futuresAsk,
@@ -510,7 +593,17 @@ public:
             default:
                 break;
         }
+    }
 
+    std::vector<OrderRequest> generateOrders(Signal signal) noexcept {
+        OrderBatch batch;
+        generateOrdersInto(signal, batch);
+
+        std::vector<OrderRequest> orders;
+        orders.reserve(batch.size());
+        for (const auto& order : batch) {
+            orders.push_back(order);
+        }
         return orders;
     }
 
