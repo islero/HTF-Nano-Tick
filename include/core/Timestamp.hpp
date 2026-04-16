@@ -292,7 +292,8 @@ public:
         for (std::size_t i = 0; i < BucketCount; ++i) {
             cumulative += m_buckets[i].load(std::memory_order_relaxed);
             if (cumulative >= target) {
-                return static_cast<std::int64_t>((i + 1) * NANOS_PER_BUCKET);
+                const auto bucketUpperBound = static_cast<std::int64_t>((i + 1) * NANOS_PER_BUCKET);
+                return std::min(bucketUpperBound, max());
             }
         }
 

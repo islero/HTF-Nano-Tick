@@ -132,8 +132,8 @@ target_link_libraries(hft_nanotick INTERFACE Threads::Threads)
 # Dependencies
 ##############################################################################
 
-# Note: QuickFIX dependency removed due to ARM64 incompatibility in v1.15.1
-# To add FIX protocol support, use a newer QuickFIX version or alternative library
+# The core library is protocol-neutral. QuickFIX-specific code is guarded by
+# HFT_ENABLE_QUICKFIX and should be wired through a separate adapter build.
 
 # Apply compiler flags to interface
 target_compile_options(hft_nanotick INTERFACE
@@ -177,7 +177,10 @@ if(HFT_BUILD_TESTS)
 
     # Test executable
     add_executable(hft_tests
+        tests/test_gateway.cpp
+        tests/test_latency.cpp
         tests/test_orderbook.cpp
+        tests/test_public_headers.cpp
         tests/test_spsc_queue.cpp
         tests/test_strategy.cpp
         # tests/test_fix_parser.cpp  # Disabled - requires QuickFIX
@@ -236,9 +239,9 @@ endif()
 # Installation (disabled - standalone project)
 ##############################################################################
 
-# Installation is disabled because quickfix is fetched via FetchContent
-# and cannot be exported. If installation is needed, quickfix should be
-# found via find_package() instead.
+# Installation is disabled for this standalone prototype. If packaging is
+# needed, add install/export rules for the header-only target and keep protocol
+# adapters in separately discovered optional packages.
 
 ##############################################################################
 # Summary
