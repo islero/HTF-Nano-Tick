@@ -136,8 +136,7 @@ static void BM_SPSCQueue_Latency(benchmark::State& state) {
 BENCHMARK(BM_SPSCQueue_Latency)->UseRealTime();
 
 // Benchmark with different element sizes
-template <std::size_t ElementSize>
-static void BM_SPSCQueue_ElementSize(benchmark::State& state) {
+template <std::size_t ElementSize> static void BM_SPSCQueue_ElementSize(benchmark::State& state) {
     struct Element {
         std::array<char, ElementSize> data;
     };

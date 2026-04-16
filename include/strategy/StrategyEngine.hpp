@@ -41,26 +41,18 @@ namespace hft {
  * to the order entry gateway for execution.
  */
 struct alignas(CACHE_LINE_SIZE) OrderRequest {
-    SymbolId  symbolId; ///< Target instrument
-    Side      side; ///< Buy or Sell
-    Price     price; ///< Limit price (0 for market)
-    Quantity  quantity; ///< Order quantity
+    SymbolId symbolId; ///< Target instrument
+    Side side; ///< Buy or Sell
+    Price price; ///< Limit price (0 for market)
+    Quantity quantity; ///< Order quantity
     OrderType orderType; ///< Order type
     Timestamp requestTime; ///< Strategy signal timestamp
     std::uint64_t strategyId; ///< Originating strategy ID
 
     OrderRequest() noexcept = default;
 
-    OrderRequest(SymbolId sym, Side s, Price p, Quantity q,
-                 OrderType type = OrderType::Limit) noexcept
-        : symbolId(sym)
-        , side(s)
-        , price(p)
-        , quantity(q)
-        , orderType(type)
-        , requestTime(nowNanos())
-        , strategyId(0)
-    {}
+    OrderRequest(SymbolId sym, Side s, Price p, Quantity q, OrderType type = OrderType::Limit) noexcept
+        : symbolId(sym), side(s), price(p), quantity(q), orderType(type), requestTime(nowNanos()), strategyId(0) {}
 };
 
 //==============================================================================
@@ -73,8 +65,7 @@ struct alignas(CACHE_LINE_SIZE) OrderRequest {
  * This is the hot-path strategy output type. It avoids heap allocation while
  * preserving the minimal vector-like API used by strategies and tests.
  */
-template <std::size_t Capacity>
-class OrderRequestBatch {
+template <std::size_t Capacity> class OrderRequestBatch {
 public:
     static_assert(Capacity > 0, "Capacity must be greater than zero");
 
@@ -92,8 +83,7 @@ public:
         return true;
     }
 
-    template <typename... Args>
-    [[nodiscard]] bool emplace_back(Args&&... args) noexcept {
+    template <typename... Args> [[nodiscard]] bool emplace_back(Args&&... args) noexcept {
         if (m_size >= Capacity) [[unlikely]] {
             return false;
         }
@@ -101,13 +91,9 @@ public:
         return true;
     }
 
-    [[nodiscard]] OrderRequest& operator[](std::size_t index) noexcept {
-        return m_orders[index];
-    }
+    [[nodiscard]] OrderRequest& operator[](std::size_t index) noexcept { return m_orders[index]; }
 
-    [[nodiscard]] const OrderRequest& operator[](std::size_t index) const noexcept {
-        return m_orders[index];
-    }
+    [[nodiscard]] const OrderRequest& operator[](std::size_t index) const noexcept { return m_orders[index]; }
 
     [[nodiscard]] OrderRequest* begin() noexcept { return m_orders.data(); }
     [[nodiscard]] OrderRequest* end() noexcept { return m_orders.data() + m_size; }
@@ -127,10 +113,10 @@ private:
  * @brief Trading signal from strategy analysis.
  */
 enum class Signal : std::int8_t {
-    None       = 0,
-    BuySpot    = 1, ///< Buy spot instrument
-    SellSpot   = -1, ///< Sell spot instrument
-    BuyFuture  = 2, ///< Buy futures contract
+    None = 0,
+    BuySpot = 1, ///< Buy spot instrument
+    SellSpot = -1, ///< Sell spot instrument
+    BuyFuture = 2, ///< Buy futures contract
     SellFuture = -2 ///< Sell futures contract
 };
 
@@ -138,11 +124,11 @@ enum class Signal : std::int8_t {
  * @brief Strategy state machine states.
  */
 enum class StrategyState : std::uint8_t {
-    Idle       = 0, ///< Not trading
-    Active     = 1, ///< Actively generating signals
-    Paused     = 2, ///< Temporarily paused
-    Stopped    = 3, ///< Stopped, no trading
-    Error      = 4 ///< Error state
+    Idle = 0, ///< Not trading
+    Active = 1, ///< Actively generating signals
+    Paused = 2, ///< Temporarily paused
+    Stopped = 3, ///< Stopped, no trading
+    Error = 4 ///< Error state
 };
 
 //==============================================================================
@@ -190,8 +176,7 @@ struct alignas(CACHE_LINE_SIZE) StrategyStats {
  *
  * @tparam Derived The derived strategy class.
  */
-template <typename Derived>
-class StrategyBase {
+template <typename Derived> class StrategyBase {
 public:
     static constexpr std::size_t MAX_ORDERS_PER_SIGNAL = 4;
     using OrderBatch = OrderRequestBatch<MAX_ORDERS_PER_SIGNAL>;
@@ -201,9 +186,7 @@ public:
      * @param strategyId Unique strategy identifier.
      */
     explicit StrategyBase(std::uint64_t strategyId = 0) noexcept
-        : m_strategyId(strategyId)
-        , m_state(StrategyState::Idle)
-    {}
+        : m_strategyId(strategyId), m_state(StrategyState::Idle) {}
 
     virtual ~StrategyBase() = default;
 
@@ -281,8 +264,7 @@ public:
      * @return Generated order requests (may be empty).
      */
     template <std::size_t Capacity>
-    std::size_t onMarketDataInto(const OrderBookUpdate& update,
-                                 OrderRequestBatch<Capacity>& orders) noexcept {
+    std::size_t onMarketDataInto(const OrderBookUpdate& update, OrderRequestBatch<Capacity>& orders) noexcept {
         orders.clear();
 
         if (m_state != StrategyState::Active) [[unlikely]] {
@@ -374,11 +356,9 @@ protected:
     template <std::size_t Capacity>
     void generateOrdersInto([[maybe_unused]] Signal signal,
                             [[maybe_unused]] OrderRequestBatch<Capacity>& orders) noexcept {}
-    void onOrderFill([[maybe_unused]] OrderId orderId,
-                     [[maybe_unused]] Price fillPrice,
+    void onOrderFill([[maybe_unused]] OrderId orderId, [[maybe_unused]] Price fillPrice,
                      [[maybe_unused]] Quantity fillQty) noexcept {}
-    void onOrderReject([[maybe_unused]] OrderId orderId,
-                       [[maybe_unused]] int reason) noexcept {}
+    void onOrderReject([[maybe_unused]] OrderId orderId, [[maybe_unused]] int reason) noexcept {}
 
     std::uint64_t m_strategyId;
     StrategyState m_state;
@@ -426,15 +406,9 @@ public:
      * @param config Strategy configuration.
      * @param strategyId Unique strategy ID.
      */
-    CashCarryArbitrage(DefaultOrderBook* spotBook,
-                       DefaultOrderBook* futuresBook,
-                       const CashCarryConfig& config = {},
+    CashCarryArbitrage(DefaultOrderBook* spotBook, DefaultOrderBook* futuresBook, const CashCarryConfig& config = {},
                        std::uint64_t strategyId = 1) noexcept
-        : Base(strategyId)
-        , m_spotBook(spotBook)
-        , m_futuresBook(futuresBook)
-        , m_config(config)
-    {}
+        : Base(strategyId), m_spotBook(spotBook), m_futuresBook(futuresBook), m_config(config) {}
 
     //==========================================================================
     // CRTP Hook Implementations
@@ -473,14 +447,13 @@ public:
      */
     Signal computeSignal() noexcept {
         // Ensure we have valid prices on both sides
-        if (m_spotBid == INVALID_PRICE || m_spotAsk == INVALID_PRICE ||
-            m_futuresBid == INVALID_PRICE || m_futuresAsk == INVALID_PRICE) {
+        if (m_spotBid == INVALID_PRICE || m_spotAsk == INVALID_PRICE || m_futuresBid == INVALID_PRICE ||
+            m_futuresAsk == INVALID_PRICE) {
             return Signal::None;
         }
 
         // Check position limits
-        if (std::abs(m_spotPosition) >= m_config.maxPosition ||
-            std::abs(m_futuresPosition) >= m_config.maxPosition) {
+        if (std::abs(m_spotPosition) >= m_config.maxPosition || std::abs(m_futuresPosition) >= m_config.maxPosition) {
             return Signal::None;
         }
 
@@ -516,9 +489,8 @@ public:
         // Exit Check: Close position when basis collapses
         //======================================================================
         if (m_spotPosition != 0) {
-            Price currentBasis = (m_spotPosition > 0)
-                ? (m_futuresBid - m_spotAsk) // Long spot, need to sell
-                : (m_spotBid - m_futuresAsk); // Short spot, need to buy
+            Price currentBasis = (m_spotPosition > 0) ? (m_futuresBid - m_spotAsk) // Long spot, need to sell
+                                                      : (m_spotBid - m_futuresAsk); // Short spot, need to buy
 
             if (currentBasis < m_config.exitThreshold) {
                 // Basis has collapsed, close position
@@ -566,8 +538,7 @@ public:
                 (void)orders.emplace_back(m_futuresBook->symbolId(), Side::Buy, m_futuresAsk, qty, OrderType::Limit);
                 break;
 
-            default:
-                break;
+            default: break;
         }
     }
 
@@ -619,13 +590,9 @@ public:
         return m_futuresBid - m_spotAsk;
     }
 
-    void setConfig(const CashCarryConfig& config) noexcept {
-        m_config = config;
-    }
+    void setConfig(const CashCarryConfig& config) noexcept { m_config = config; }
 
-    [[nodiscard]] const CashCarryConfig& config() const noexcept {
-        return m_config;
-    }
+    [[nodiscard]] const CashCarryConfig& config() const noexcept { return m_config; }
 
 private:
     DefaultOrderBook* m_spotBook;

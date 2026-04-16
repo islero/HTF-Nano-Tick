@@ -22,16 +22,16 @@
 #include <thread>
 
 #if defined(__x86_64__) || defined(_M_X64)
-    #if defined(_MSC_VER)
-        #include <intrin.h>
-    #else
-        #include <x86intrin.h>
-    #endif
-    #define HFT_HAS_RDTSC 1
-#elif defined(__aarch64__) || defined(_M_ARM64)
-    #define HFT_HAS_RDTSC 0
+#if defined(_MSC_VER)
+#include <intrin.h>
 #else
-    #define HFT_HAS_RDTSC 0
+#include <x86intrin.h>
+#endif
+#define HFT_HAS_RDTSC 1
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#define HFT_HAS_RDTSC 0
+#else
+#define HFT_HAS_RDTSC 0
 #endif
 
 namespace hft {
@@ -60,8 +60,7 @@ namespace hft {
     return val;
 #else
     // Fallback to chrono
-    return static_cast<std::uint64_t>(
-        std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 #endif
 }
 
@@ -169,14 +168,10 @@ public:
      * @brief Get the TSC frequency in Hz.
      * @return TSC frequency.
      */
-    [[nodiscard]] double tscFrequency() const noexcept {
-        return m_cyclesPerNano * 1e9;
-    }
+    [[nodiscard]] double tscFrequency() const noexcept { return m_cyclesPerNano * 1e9; }
 
 private:
-    TscCalibrator() noexcept {
-        calibrate();
-    }
+    TscCalibrator() noexcept { calibrate(); }
 
     void calibrate() noexcept {
         constexpr std::size_t SAMPLES = 5;
@@ -193,8 +188,7 @@ private:
             std::uint64_t end_tsc = rdtsc();
             auto end_wall = std::chrono::steady_clock::now();
 
-            auto wall_nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                end_wall - start_wall).count();
+            auto wall_nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(end_wall - start_wall).count();
             std::uint64_t tsc_delta = end_tsc - start_tsc;
 
             if (wall_nanos > 0) {
@@ -234,16 +228,15 @@ public:
     /// Nanoseconds per bucket
     static constexpr std::int64_t NANOS_PER_BUCKET = MaxLatencyNanos / BucketCount;
 
-    LatencyHistogram() noexcept {
-        reset();
-    }
+    LatencyHistogram() noexcept { reset(); }
 
     /**
      * @brief Record a latency measurement.
      * @param latencyNanos Latency in nanoseconds.
      */
     void record(std::int64_t latencyNanos) noexcept {
-        if (latencyNanos < 0) [[unlikely]] return;
+        if (latencyNanos < 0) [[unlikely]]
+            return;
 
         std::size_t bucket = static_cast<std::size_t>(latencyNanos / NANOS_PER_BUCKET);
         if (bucket >= BucketCount) [[unlikely]] {
@@ -257,13 +250,13 @@ public:
         // Update min/max (lock-free)
         std::int64_t currentMin = m_min.load(std::memory_order_relaxed);
         while (latencyNanos < currentMin &&
-               !m_min.compare_exchange_weak(currentMin, latencyNanos,
-                   std::memory_order_relaxed, std::memory_order_relaxed)) {}
+               !m_min.compare_exchange_weak(currentMin, latencyNanos, std::memory_order_relaxed,
+                                            std::memory_order_relaxed)) {}
 
         std::int64_t currentMax = m_max.load(std::memory_order_relaxed);
         while (latencyNanos > currentMax &&
-               !m_max.compare_exchange_weak(currentMax, latencyNanos,
-                   std::memory_order_relaxed, std::memory_order_relaxed)) {}
+               !m_max.compare_exchange_weak(currentMax, latencyNanos, std::memory_order_relaxed,
+                                            std::memory_order_relaxed)) {}
     }
 
     /**
@@ -313,27 +306,20 @@ public:
     [[nodiscard]] std::int64_t p999() const noexcept { return percentile(0.999); }
 
     /// Get minimum latency
-    [[nodiscard]] std::int64_t min() const noexcept {
-        return m_min.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] std::int64_t min() const noexcept { return m_min.load(std::memory_order_relaxed); }
 
     /// Get maximum latency
-    [[nodiscard]] std::int64_t max() const noexcept {
-        return m_max.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] std::int64_t max() const noexcept { return m_max.load(std::memory_order_relaxed); }
 
     /// Get average latency
     [[nodiscard]] double avg() const noexcept {
         std::uint64_t count = m_count.load(std::memory_order_relaxed);
         if (count == 0) return 0.0;
-        return static_cast<double>(m_sum.load(std::memory_order_relaxed)) /
-               static_cast<double>(count);
+        return static_cast<double>(m_sum.load(std::memory_order_relaxed)) / static_cast<double>(count);
     }
 
     /// Get total sample count
-    [[nodiscard]] std::uint64_t count() const noexcept {
-        return m_count.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] std::uint64_t count() const noexcept { return m_count.load(std::memory_order_relaxed); }
 
     /// Reset all statistics
     void reset() noexcept {

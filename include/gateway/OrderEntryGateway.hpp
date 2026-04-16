@@ -83,34 +83,30 @@ struct GatewayConfig {
  * @brief Internal order representation with full state tracking.
  */
 struct alignas(CACHE_LINE_SIZE) InternalOrder {
-    OrderId     clientOrderId; ///< Client-assigned order ID
-    OrderId     exchangeOrderId; ///< Exchange-assigned order ID
-    SymbolId    symbolId; ///< Instrument
+    OrderId clientOrderId; ///< Client-assigned order ID
+    OrderId exchangeOrderId; ///< Exchange-assigned order ID
+    SymbolId symbolId; ///< Instrument
     std::string symbol; ///< Symbol string
-    Side        side; ///< Buy/Sell
-    Price       price; ///< Limit price
-    Quantity    orderQty; ///< Original quantity
-    Quantity    filledQty; ///< Cumulative filled quantity
-    Quantity    remainingQty; ///< Remaining quantity
+    Side side; ///< Buy/Sell
+    Price price; ///< Limit price
+    Quantity orderQty; ///< Original quantity
+    Quantity filledQty; ///< Cumulative filled quantity
+    Quantity remainingQty; ///< Remaining quantity
     OrderStatus status; ///< Current status
-    OrderType   orderType; ///< Order type
-    Timestamp   submitTime; ///< When order was submitted
-    Timestamp   lastUpdateTime; ///< Last status change
+    OrderType orderType; ///< Order type
+    Timestamp submitTime; ///< When order was submitted
+    Timestamp lastUpdateTime; ///< Last status change
     std::uint64_t strategyId; ///< Originating strategy
 
     InternalOrder() noexcept = default;
 
     [[nodiscard]] bool isActive() const noexcept {
-        return status == OrderStatus::New ||
-               status == OrderStatus::PartiallyFilled ||
-               status == OrderStatus::PendingNew ||
-               status == OrderStatus::PendingCancel;
+        return status == OrderStatus::New || status == OrderStatus::PartiallyFilled ||
+               status == OrderStatus::PendingNew || status == OrderStatus::PendingCancel;
     }
 
     [[nodiscard]] bool isTerminal() const noexcept {
-        return status == OrderStatus::Filled ||
-               status == OrderStatus::Canceled ||
-               status == OrderStatus::Rejected;
+        return status == OrderStatus::Filled || status == OrderStatus::Canceled || status == OrderStatus::Rejected;
     }
 };
 
@@ -122,15 +118,15 @@ struct alignas(CACHE_LINE_SIZE) InternalOrder {
  * @brief Execution report from exchange.
  */
 struct ExecutionReport {
-    OrderId     clientOrderId;
-    OrderId     exchangeOrderId;
+    OrderId clientOrderId;
+    OrderId exchangeOrderId;
     OrderStatus status;
-    Price       lastPrice; ///< Last fill price
-    Quantity    lastQty; ///< Last fill quantity
-    Quantity    cumulativeQty; ///< Total filled quantity
-    Quantity    leavesQty; ///< Remaining quantity
-    Timestamp   transactTime; ///< Exchange timestamp
-    int         rejectReason; ///< Reason code if rejected
+    Price lastPrice; ///< Last fill price
+    Quantity lastQty; ///< Last fill quantity
+    Quantity cumulativeQty; ///< Total filled quantity
+    Quantity leavesQty; ///< Remaining quantity
+    Timestamp transactTime; ///< Exchange timestamp
+    int rejectReason; ///< Reason code if rejected
     std::string text; ///< Reject reason text
 };
 
@@ -144,11 +140,7 @@ struct ExecutionReport {
  * Gateways can translate this object to FIX, OUCH, binary native protocols, or a
  * simulator without making the core order manager depend on a transport library.
  */
-enum class OutboundOrderAction : std::uint8_t {
-    New = 0,
-    Cancel = 1,
-    Replace = 2
-};
+enum class OutboundOrderAction : std::uint8_t { New = 0, Cancel = 1, Replace = 2 };
 
 struct OutboundOrderMessage {
     OutboundOrderAction action{OutboundOrderAction::New};
@@ -208,8 +200,7 @@ struct alignas(CACHE_LINE_SIZE) GatewayStats {
  *
  * @tparam QueueCapacity Size of internal order queue.
  */
-template <std::size_t QueueCapacity = 4096>
-class OrderEntryGateway {
+template <std::size_t QueueCapacity = 4096> class OrderEntryGateway {
 public:
     static_assert(QueueCapacity > 0, "QueueCapacity must be greater than zero");
 
@@ -223,10 +214,7 @@ public:
      * @brief Construct order entry gateway.
      * @param config Gateway configuration.
      */
-    explicit OrderEntryGateway(const GatewayConfig& config = {}) noexcept
-        : m_config(config)
-        , m_nextOrderId(1)
-    {}
+    explicit OrderEntryGateway(const GatewayConfig& config = {}) noexcept : m_config(config), m_nextOrderId(1) {}
 
     ~OrderEntryGateway() = default;
 
@@ -467,8 +455,7 @@ public:
                 cleanupOrder(report.clientOrderId);
                 break;
 
-            default:
-                break;
+            default: break;
         }
 
         // Invoke callback
@@ -502,24 +489,12 @@ public:
         char et = execType.getValue();
 
         switch (et) {
-            case qfix::EXEC_TYPE_NEW:
-                report.status = OrderStatus::New;
-                break;
-            case qfix::EXEC_TYPE_PARTIAL_FILL:
-                report.status = OrderStatus::PartiallyFilled;
-                break;
-            case qfix::EXEC_TYPE_FILL:
-                report.status = OrderStatus::Filled;
-                break;
-            case qfix::EXEC_TYPE_CANCELED:
-                report.status = OrderStatus::Canceled;
-                break;
-            case qfix::EXEC_TYPE_REJECTED:
-                report.status = OrderStatus::Rejected;
-                break;
-            default:
-                report.status = OrderStatus::New;
-                break;
+            case qfix::EXEC_TYPE_NEW: report.status = OrderStatus::New; break;
+            case qfix::EXEC_TYPE_PARTIAL_FILL: report.status = OrderStatus::PartiallyFilled; break;
+            case qfix::EXEC_TYPE_FILL: report.status = OrderStatus::Filled; break;
+            case qfix::EXEC_TYPE_CANCELED: report.status = OrderStatus::Canceled; break;
+            case qfix::EXEC_TYPE_REJECTED: report.status = OrderStatus::Rejected; break;
+            default: report.status = OrderStatus::New; break;
         }
 
         // Extract fill information
@@ -604,9 +579,7 @@ public:
      * @brief Get number of pending orders (awaiting ack).
      * @return Count of pending orders.
      */
-    [[nodiscard]] std::size_t pendingOrderCount() const noexcept {
-        return m_pendingOrders.size();
-    }
+    [[nodiscard]] std::size_t pendingOrderCount() const noexcept { return m_pendingOrders.size(); }
 
     /**
      * @brief Get current position for a symbol.
@@ -625,35 +598,26 @@ public:
     /**
      * @brief Set callback for order status updates.
      */
-    void setOrderCallback(OrderCallback callback) noexcept {
-        m_orderCallback = std::move(callback);
-    }
+    void setOrderCallback(OrderCallback callback) noexcept { m_orderCallback = std::move(callback); }
 
     /**
      * @brief Set callback for sending FIX messages.
      */
-    void setSendCallback(SendCallback callback) noexcept {
-        m_sendCallback = std::move(callback);
-    }
+    void setSendCallback(SendCallback callback) noexcept { m_sendCallback = std::move(callback); }
 
     //==========================================================================
     // Statistics
     //==========================================================================
 
-    [[nodiscard]] const GatewayStats& stats() const noexcept {
-        return m_stats;
-    }
+    [[nodiscard]] const GatewayStats& stats() const noexcept { return m_stats; }
 
-    void resetStats() noexcept {
-        m_stats.reset();
-    }
+    void resetStats() noexcept { m_stats.reset(); }
 
 private:
     [[nodiscard]] bool checkRateLimit(Timestamp now) noexcept {
         constexpr Timestamp WINDOW_NANOS = 1'000'000'000; // 1 second
 
-        while (m_orderTimeCount > 0 &&
-               (now - m_orderTimes[m_orderTimeHead]) > WINDOW_NANOS) {
+        while (m_orderTimeCount > 0 && (now - m_orderTimes[m_orderTimeHead]) > WINDOW_NANOS) {
             m_orderTimeHead = (m_orderTimeHead + 1U) % QueueCapacity;
             --m_orderTimeCount;
         }
@@ -695,18 +659,14 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool exceedsMaxOrderValue(Price price, Quantity quantity,
-                                            std::int64_t maxOrderValue) const noexcept {
+    [[nodiscard]] bool exceedsMaxOrderValue(Price price, Quantity quantity, std::int64_t maxOrderValue) const noexcept {
 #if defined(__SIZEOF_INT128__)
         const __int128 notional = static_cast<__int128>(price) * static_cast<__int128>(quantity);
-        const __int128 limit = static_cast<__int128>(maxOrderValue) *
-                               static_cast<__int128>(PRICE_MULTIPLIER);
+        const __int128 limit = static_cast<__int128>(maxOrderValue) * static_cast<__int128>(PRICE_MULTIPLIER);
         return notional > limit;
 #else
-        const long double notional = static_cast<long double>(price) *
-                                     static_cast<long double>(quantity);
-        const long double limit = static_cast<long double>(maxOrderValue) *
-                                  static_cast<long double>(PRICE_MULTIPLIER);
+        const long double notional = static_cast<long double>(price) * static_cast<long double>(quantity);
+        const long double limit = static_cast<long double>(maxOrderValue) * static_cast<long double>(PRICE_MULTIPLIER);
         return notional > limit;
 #endif
     }
@@ -716,53 +676,44 @@ private:
         const Quantity pendingPos = getMappedQuantity(m_pendingPositions, request.symbolId);
 
 #if defined(__SIZEOF_INT128__)
-        const __int128 signedQty = request.side == Side::Buy
-            ? static_cast<__int128>(request.quantity)
-            : -static_cast<__int128>(request.quantity);
-        __int128 exposure = static_cast<__int128>(currentPos) +
-                            static_cast<__int128>(pendingPos) +
-                            signedQty;
+        const __int128 signedQty = request.side == Side::Buy ? static_cast<__int128>(request.quantity)
+                                                             : -static_cast<__int128>(request.quantity);
+        __int128 exposure = static_cast<__int128>(currentPos) + static_cast<__int128>(pendingPos) + signedQty;
         if (exposure < 0) {
             exposure = -exposure;
         }
         return exposure > static_cast<__int128>(m_config.maxPositionPerSymbol);
 #else
-        const long double signedQty = request.side == Side::Buy
-            ? static_cast<long double>(request.quantity)
-            : -static_cast<long double>(request.quantity);
-        const long double exposure = std::abs(static_cast<long double>(currentPos) +
-                                              static_cast<long double>(pendingPos) +
-                                              signedQty);
+        const long double signedQty = request.side == Side::Buy ? static_cast<long double>(request.quantity)
+                                                                : -static_cast<long double>(request.quantity);
+        const long double exposure =
+            std::abs(static_cast<long double>(currentPos) + static_cast<long double>(pendingPos) + signedQty);
         return exposure > static_cast<long double>(m_config.maxPositionPerSymbol);
 #endif
     }
 
-    [[nodiscard]] static Quantity getMappedQuantity(
-        const std::unordered_map<SymbolId, Quantity>& map, SymbolId symbolId) noexcept {
+    [[nodiscard]] static Quantity getMappedQuantity(const std::unordered_map<SymbolId, Quantity>& map,
+                                                    SymbolId symbolId) noexcept {
         auto it = map.find(symbolId);
         return it != map.end() ? it->second : 0;
     }
 
     void updatePositionOnOrder(const OrderRequest& request) noexcept {
         // Reserve position for pending order
-        Quantity delta = (request.side == Side::Buy) ?
-                         static_cast<Quantity>(request.quantity) :
-                         -static_cast<Quantity>(request.quantity);
+        Quantity delta = (request.side == Side::Buy) ? static_cast<Quantity>(request.quantity)
+                                                     : -static_cast<Quantity>(request.quantity);
         m_pendingPositions[request.symbolId] += delta;
     }
 
     void updatePositionOnFill(const InternalOrder& order, Quantity fillQty) noexcept {
-        Quantity delta = (order.side == Side::Buy) ?
-                         static_cast<Quantity>(fillQty) :
-                         -static_cast<Quantity>(fillQty);
+        Quantity delta = (order.side == Side::Buy) ? static_cast<Quantity>(fillQty) : -static_cast<Quantity>(fillQty);
         m_positions[order.symbolId] += delta;
         m_pendingPositions[order.symbolId] -= delta;
     }
 
     void updatePositionOnCancel(const InternalOrder& order) noexcept {
-        Quantity delta = (order.side == Side::Buy) ?
-                         static_cast<Quantity>(order.remainingQty) :
-                         -static_cast<Quantity>(order.remainingQty);
+        Quantity delta = (order.side == Side::Buy) ? static_cast<Quantity>(order.remainingQty)
+                                                   : -static_cast<Quantity>(order.remainingQty);
         m_pendingPositions[order.symbolId] -= delta;
     }
 
@@ -775,13 +726,11 @@ private:
     void updateLatencyStats(Timestamp latency) noexcept {
         Timestamp currentMin = m_stats.minSubmitLatencyNanos.load(std::memory_order_relaxed);
         while (latency < currentMin &&
-               !m_stats.minSubmitLatencyNanos.compare_exchange_weak(currentMin, latency,
-                   std::memory_order_relaxed)) {}
+               !m_stats.minSubmitLatencyNanos.compare_exchange_weak(currentMin, latency, std::memory_order_relaxed)) {}
 
         Timestamp currentMax = m_stats.maxSubmitLatencyNanos.load(std::memory_order_relaxed);
         while (latency > currentMax &&
-               !m_stats.maxSubmitLatencyNanos.compare_exchange_weak(currentMax, latency,
-                   std::memory_order_relaxed)) {}
+               !m_stats.maxSubmitLatencyNanos.compare_exchange_weak(currentMax, latency, std::memory_order_relaxed)) {}
     }
 
     [[nodiscard]] std::string symbolIdToString(SymbolId id) const noexcept {

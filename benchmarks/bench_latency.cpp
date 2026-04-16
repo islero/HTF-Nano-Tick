@@ -439,12 +439,8 @@ static void BM_PriceFromDouble(benchmark::State& state) {
 BENCHMARK(BM_PriceFromDouble);
 
 static void BM_PriceToDouble(benchmark::State& state) {
-    Price prices[] = {
-        priceFromDouble(100.5),
-        priceFromDouble(50000.12345678),
-        priceFromDouble(0.00000001),
-        priceFromDouble(99999.99999999)
-    };
+    Price prices[] = {priceFromDouble(100.5), priceFromDouble(50000.12345678), priceFromDouble(0.00000001),
+                      priceFromDouble(99999.99999999)};
     std::size_t idx = 0;
 
     for (auto _ : state) {

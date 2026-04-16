@@ -54,31 +54,21 @@ namespace detail {
  * @brief Single order entry in the order book.
  */
 struct alignas(CACHE_LINE_SIZE) Order {
-    OrderId   orderId; ///< Unique order identifier
-    Price     price; ///< Limit price (fixed-point)
-    Quantity  quantity; ///< Remaining quantity
-    Quantity  filledQty; ///< Filled quantity
-    Side      side; ///< Buy or Sell
+    OrderId orderId; ///< Unique order identifier
+    Price price; ///< Limit price (fixed-point)
+    Quantity quantity; ///< Remaining quantity
+    Quantity filledQty; ///< Filled quantity
+    Side side; ///< Buy or Sell
     Timestamp timestamp; ///< Order entry time
 
     constexpr Order() noexcept = default;
 
     constexpr Order(OrderId id, Price p, Quantity qty, Side s, Timestamp ts = 0) noexcept
-        : orderId(id)
-        , price(p)
-        , quantity(qty)
-        , filledQty(0)
-        , side(s)
-        , timestamp(ts)
-    {}
+        : orderId(id), price(p), quantity(qty), filledQty(0), side(s), timestamp(ts) {}
 
-    [[nodiscard]] constexpr bool isValid() const noexcept {
-        return orderId != INVALID_ORDER_ID && quantity > 0;
-    }
+    [[nodiscard]] constexpr bool isValid() const noexcept { return orderId != INVALID_ORDER_ID && quantity > 0; }
 
-    [[nodiscard]] constexpr Quantity remainingQty() const noexcept {
-        return quantity - filledQty;
-    }
+    [[nodiscard]] constexpr Quantity remainingQty() const noexcept { return quantity - filledQty; }
 };
 
 //==============================================================================
@@ -89,7 +79,7 @@ struct alignas(CACHE_LINE_SIZE) Order {
  * @brief Aggregated state for one price level.
  */
 struct PriceLevel {
-    Price    price{INVALID_PRICE}; ///< Price at this level
+    Price price{INVALID_PRICE}; ///< Price at this level
     Quantity totalQty{0}; ///< Total quantity at this level
     std::size_t orders{0}; ///< Number of FIFO orders at this level
 
@@ -108,13 +98,13 @@ struct PriceLevel {
  * @brief Event emitted when order book state changes.
  */
 struct OrderBookUpdate {
-    MdMsgType  action; ///< Add, Modify, Delete, Trade
-    Side       side; ///< Affected side
-    Price      price; ///< Affected price level
-    Quantity   quantity; ///< New/changed quantity
-    Quantity   totalQtyAtLevel; ///< Total quantity at price level after update
-    OrderId    orderId; ///< Related order ID
-    Timestamp  timestamp; ///< Event timestamp
+    MdMsgType action; ///< Add, Modify, Delete, Trade
+    Side side; ///< Affected side
+    Price price; ///< Affected price level
+    Quantity quantity; ///< New/changed quantity
+    Quantity totalQtyAtLevel; ///< Total quantity at price level after update
+    OrderId orderId; ///< Related order ID
+    Timestamp timestamp; ///< Event timestamp
 };
 
 //==============================================================================
@@ -127,8 +117,7 @@ struct OrderBookUpdate {
  * @tparam MaxLevels Maximum price levels to maintain per side.
  * @tparam MaxOrders Maximum total live orders in the book.
  */
-template <std::size_t MaxLevels = 100, std::size_t MaxOrders = 10000>
-class OrderBook {
+template <std::size_t MaxLevels = 100, std::size_t MaxOrders = 10000> class OrderBook {
 public:
     static_assert(MaxLevels > 0, "MaxLevels must be greater than zero");
     static_assert(MaxOrders > 0, "MaxOrders must be greater than zero");
@@ -136,11 +125,7 @@ public:
     /// Callback type for order book updates. Install outside the hot path.
     using UpdateCallback = std::function<void(const OrderBookUpdate&)>;
 
-    explicit OrderBook(SymbolId symbolId = 0) noexcept
-        : m_symbolId(symbolId)
-    {
-        resetStorage();
-    }
+    explicit OrderBook(SymbolId symbolId = 0) noexcept : m_symbolId(symbolId) { resetStorage(); }
 
     OrderBook(const OrderBook&) = delete;
     OrderBook& operator=(const OrderBook&) = delete;
@@ -217,8 +202,7 @@ public:
         order.quantity = newQuantity;
         level.level.totalQty += delta;
 
-        emitUpdate(MdMsgType::Modify, order.side, order.price, newQuantity,
-                   level.level.totalQty, orderId);
+        emitUpdate(MdMsgType::Modify, order.side, order.price, newQuantity, level.level.totalQty, orderId);
 
         return true;
     }
@@ -277,9 +261,7 @@ public:
         emitUpdate(MdMsgType::Snapshot, Side::Buy, m_bestBid, 0, 0, 0);
     }
 
-    void clear() noexcept {
-        resetStorage();
-    }
+    void clear() noexcept { resetStorage(); }
 
     //==========================================================================
     // Book Queries
@@ -331,16 +313,11 @@ public:
         return side == Side::Buy ? m_bidLevelCount : m_askLevelCount;
     }
 
-    [[nodiscard]] std::size_t orderCount() const noexcept {
-        return m_orderCount;
-    }
+    [[nodiscard]] std::size_t orderCount() const noexcept { return m_orderCount; }
 
-    [[nodiscard]] bool empty() const noexcept {
-        return m_orderCount == 0;
-    }
+    [[nodiscard]] bool empty() const noexcept { return m_orderCount == 0; }
 
-    void getTopLevels(Side side, std::size_t depth,
-                      std::vector<std::pair<Price, Quantity>>& levels) const {
+    void getTopLevels(Side side, std::size_t depth, std::vector<std::pair<Price, Quantity>>& levels) const {
         levels.clear();
         levels.reserve(depth);
 
@@ -357,9 +334,7 @@ public:
     // Callbacks
     //==========================================================================
 
-    void setUpdateCallback(UpdateCallback callback) noexcept {
-        m_updateCallback = std::move(callback);
-    }
+    void setUpdateCallback(UpdateCallback callback) noexcept { m_updateCallback = std::move(callback); }
 
     [[nodiscard]] SymbolId symbolId() const noexcept { return m_symbolId; }
     [[nodiscard]] static constexpr std::size_t maxLevels() noexcept { return MaxLevels; }
@@ -634,12 +609,10 @@ private:
         }
     }
 
-    void emitUpdate(MdMsgType action, Side side, Price price,
-                    Quantity quantity, Quantity totalQtyAtLevel, OrderId orderId) {
+    void emitUpdate(MdMsgType action, Side side, Price price, Quantity quantity, Quantity totalQtyAtLevel,
+                    OrderId orderId) {
         if (m_updateCallback) {
-            m_updateCallback(OrderBookUpdate{
-                action, side, price, quantity, totalQtyAtLevel, orderId, nowNanos()
-            });
+            m_updateCallback(OrderBookUpdate{action, side, price, quantity, totalQtyAtLevel, orderId, nowNanos()});
         }
     }
 

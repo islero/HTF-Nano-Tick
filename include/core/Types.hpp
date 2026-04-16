@@ -104,64 +104,47 @@ inline constexpr SeqNum INVALID_SEQ_NUM = std::numeric_limits<SeqNum>::max();
 /**
  * @brief Order side enumeration.
  */
-enum class Side : std::uint8_t {
-    Buy  = 0,
-    Sell = 1
-};
+enum class Side : std::uint8_t { Buy = 0, Sell = 1 };
 
 /**
  * @brief Get the opposite side.
  * @param side The current side.
  * @return The opposite side.
  */
-[[nodiscard]] constexpr Side oppositeSide(Side side) noexcept {
-    return side == Side::Buy ? Side::Sell : Side::Buy;
-}
+[[nodiscard]] constexpr Side oppositeSide(Side side) noexcept { return side == Side::Buy ? Side::Sell : Side::Buy; }
 
 /**
  * @brief Order type enumeration.
  */
 enum class OrderType : std::uint8_t {
-    Limit  = 0,
+    Limit = 0,
     Market = 1,
-    IOC    = 2, // Immediate or Cancel
-    FOK    = 3 // Fill or Kill
+    IOC = 2, // Immediate or Cancel
+    FOK = 3 // Fill or Kill
 };
 
 /**
  * @brief Order status enumeration.
  */
 enum class OrderStatus : std::uint8_t {
-    New             = 0,
+    New = 0,
     PartiallyFilled = 1,
-    Filled          = 2,
-    Canceled        = 3,
-    Rejected        = 4,
-    PendingNew      = 5,
-    PendingCancel   = 6
+    Filled = 2,
+    Canceled = 3,
+    Rejected = 4,
+    PendingNew = 5,
+    PendingCancel = 6
 };
 
 /**
  * @brief Market data message type.
  */
-enum class MdMsgType : std::uint8_t {
-    Add       = 0,
-    Modify    = 1,
-    Delete    = 2,
-    Trade     = 3,
-    Snapshot  = 4,
-    Heartbeat = 5
-};
+enum class MdMsgType : std::uint8_t { Add = 0, Modify = 1, Delete = 2, Trade = 3, Snapshot = 4, Heartbeat = 5 };
 
 /**
  * @brief Instrument type enumeration.
  */
-enum class InstrumentType : std::uint8_t {
-    Spot    = 0,
-    Future  = 1,
-    Option  = 2,
-    Perpetual = 3
-};
+enum class InstrumentType : std::uint8_t { Spot = 0, Future = 1, Option = 2, Perpetual = 3 };
 
 //==============================================================================
 // Symbol Representation
@@ -187,9 +170,7 @@ struct alignas(16) Symbol {
         data[i] = '\0';
     }
 
-    [[nodiscard]] constexpr const char* c_str() const noexcept {
-        return data.data();
-    }
+    [[nodiscard]] constexpr const char* c_str() const noexcept { return data.data(); }
 
     [[nodiscard]] constexpr bool operator==(const Symbol& other) const noexcept {
         for (std::size_t i = 0; i <= MAX_LENGTH; ++i) {

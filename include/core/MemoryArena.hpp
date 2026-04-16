@@ -32,8 +32,7 @@ namespace hft {
  * @tparam T The type to allocate.
  * @tparam Alignment The alignment boundary (default: cache line size).
  */
-template <typename T, std::size_t Alignment = CACHE_LINE_SIZE>
-class AlignedAllocator {
+template <typename T, std::size_t Alignment = CACHE_LINE_SIZE> class AlignedAllocator {
 public:
     using value_type = T;
     using pointer = T*;
@@ -41,15 +40,13 @@ public:
     using size_type = std::size_t;
     using difference_type = std::ptrdiff_t;
 
-    template <typename U>
-    struct rebind {
+    template <typename U> struct rebind {
         using other = AlignedAllocator<U, Alignment>;
     };
 
     constexpr AlignedAllocator() noexcept = default;
 
-    template <typename U>
-    constexpr AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept {}
+    template <typename U> constexpr AlignedAllocator(const AlignedAllocator<U, Alignment>&) noexcept {}
 
     [[nodiscard]] pointer allocate(size_type n) {
         void* ptr = nullptr;
@@ -72,13 +69,11 @@ public:
 #endif
     }
 
-    template <typename U>
-    [[nodiscard]] bool operator==(const AlignedAllocator<U, Alignment>&) const noexcept {
+    template <typename U> [[nodiscard]] bool operator==(const AlignedAllocator<U, Alignment>&) const noexcept {
         return true;
     }
 
-    template <typename U>
-    [[nodiscard]] bool operator!=(const AlignedAllocator<U, Alignment>&) const noexcept {
+    template <typename U> [[nodiscard]] bool operator!=(const AlignedAllocator<U, Alignment>&) const noexcept {
         return false;
     }
 };
@@ -97,8 +92,7 @@ public:
  * @tparam T The object type to pool.
  * @tparam Capacity Maximum number of objects in the pool.
  */
-template <typename T, std::size_t Capacity>
-class alignas(CACHE_LINE_SIZE) ObjectPool {
+template <typename T, std::size_t Capacity> class alignas(CACHE_LINE_SIZE) ObjectPool {
 public:
     static_assert(Capacity > 0, "Pool capacity must be greater than 0");
     static_assert(std::is_trivially_destructible_v<T> || std::is_nothrow_destructible_v<T>,
@@ -147,7 +141,8 @@ public:
      * @param obj Pointer to the object to deallocate.
      */
     void deallocate(T* obj) noexcept {
-        if (!obj) [[unlikely]] return;
+        if (!obj) [[unlikely]]
+            return;
 
         if constexpr (!std::is_trivially_destructible_v<T>) {
             obj->~T();
@@ -170,17 +165,13 @@ public:
      * @brief Get the number of available slots.
      * @return Number of free slots.
      */
-    [[nodiscard]] std::size_t availableCount() const noexcept {
-        return Capacity - allocatedCount();
-    }
+    [[nodiscard]] std::size_t availableCount() const noexcept { return Capacity - allocatedCount(); }
 
     /**
      * @brief Get the total pool capacity.
      * @return Pool capacity.
      */
-    [[nodiscard]] static constexpr std::size_t capacity() noexcept {
-        return Capacity;
-    }
+    [[nodiscard]] static constexpr std::size_t capacity() noexcept { return Capacity; }
 
 private:
     union Slot {
@@ -192,8 +183,8 @@ private:
         Slot* oldHead = m_freeList.load(std::memory_order_acquire);
         while (oldHead) {
             Slot* newHead = oldHead->next;
-            if (m_freeList.compare_exchange_weak(oldHead, newHead,
-                    std::memory_order_release, std::memory_order_acquire)) {
+            if (m_freeList.compare_exchange_weak(oldHead, newHead, std::memory_order_release,
+                                                 std::memory_order_acquire)) {
                 return oldHead;
             }
         }
@@ -204,8 +195,8 @@ private:
         Slot* oldHead = m_freeList.load(std::memory_order_acquire);
         do {
             slot->next = oldHead;
-        } while (!m_freeList.compare_exchange_weak(oldHead, slot,
-                    std::memory_order_release, std::memory_order_acquire));
+        } while (
+            !m_freeList.compare_exchange_weak(oldHead, slot, std::memory_order_release, std::memory_order_acquire));
     }
 
     alignas(CACHE_LINE_SIZE) std::atomic<Slot*> m_freeList{nullptr};
@@ -226,8 +217,7 @@ private:
  *
  * @tparam Size The arena size in bytes.
  */
-template <std::size_t Size>
-class alignas(CACHE_LINE_SIZE) LinearArena {
+template <std::size_t Size> class alignas(CACHE_LINE_SIZE) LinearArena {
 public:
     static_assert(Size > 0, "Arena size must be greater than 0");
     static_assert((Size & (Size - 1)) == 0 || Size % CACHE_LINE_SIZE == 0,
@@ -273,7 +263,8 @@ public:
     template <typename T, typename... Args>
     [[nodiscard]] T* create(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
         void* ptr = allocate<alignof(T)>(sizeof(T));
-        if (!ptr) [[unlikely]] return nullptr;
+        if (!ptr) [[unlikely]]
+            return nullptr;
         return new (ptr) T(std::forward<Args>(args)...);
     }
 
@@ -283,33 +274,25 @@ public:
      * Note: Does not call destructors. Caller is responsible for
      * destroying objects if needed before reset.
      */
-    void reset() noexcept {
-        m_offset = 0;
-    }
+    void reset() noexcept { m_offset = 0; }
 
     /**
      * @brief Get the number of bytes used.
      * @return Bytes allocated from the arena.
      */
-    [[nodiscard]] std::size_t used() const noexcept {
-        return m_offset;
-    }
+    [[nodiscard]] std::size_t used() const noexcept { return m_offset; }
 
     /**
      * @brief Get the number of bytes remaining.
      * @return Bytes available for allocation.
      */
-    [[nodiscard]] std::size_t remaining() const noexcept {
-        return Size - m_offset;
-    }
+    [[nodiscard]] std::size_t remaining() const noexcept { return Size - m_offset; }
 
     /**
      * @brief Get the total arena capacity.
      * @return Arena size in bytes.
      */
-    [[nodiscard]] static constexpr std::size_t capacity() noexcept {
-        return Size;
-    }
+    [[nodiscard]] static constexpr std::size_t capacity() noexcept { return Size; }
 
 private:
     alignas(CACHE_LINE_SIZE) std::array<std::byte, Size> m_buffer;

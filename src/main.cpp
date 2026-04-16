@@ -46,10 +46,8 @@ void demonstrateOrderBook() {
     (void)book.addOrder(5, Side::Sell, priceFromDouble(100.60), 200);
     (void)book.addOrder(6, Side::Sell, priceFromDouble(100.65), 150);
 
-    std::cout << "Best Bid: " << priceToDouble(book.bestBid())
-              << " @ " << book.bestBidQty() << "\n";
-    std::cout << "Best Ask: " << priceToDouble(book.bestAsk())
-              << " @ " << book.bestAskQty() << "\n";
+    std::cout << "Best Bid: " << priceToDouble(book.bestBid()) << " @ " << book.bestBidQty() << "\n";
+    std::cout << "Best Ask: " << priceToDouble(book.bestAsk()) << " @ " << book.bestAskQty() << "\n";
     std::cout << "Mid Price: " << priceToDouble(book.midPrice()) << "\n";
     std::cout << "Spread: " << priceToDouble(book.spread()) << "\n";
     std::cout << "Is Crossed: " << (book.isCrossed() ? "Yes" : "No") << "\n";
@@ -181,10 +179,10 @@ void demonstrateStrategy() {
     (void)futuresBook.addOrder(4, Side::Sell, priceFromDouble(50110.00), 10);
 
     std::cout << "Initial Market State:\n";
-    std::cout << "  Spot:    " << priceToDouble(spotBook.bestBid()) << " / "
-              << priceToDouble(spotBook.bestAsk()) << "\n";
-    std::cout << "  Futures: " << priceToDouble(futuresBook.bestBid()) << " / "
-              << priceToDouble(futuresBook.bestAsk()) << "\n";
+    std::cout << "  Spot:    " << priceToDouble(spotBook.bestBid()) << " / " << priceToDouble(spotBook.bestAsk())
+              << "\n";
+    std::cout << "  Futures: " << priceToDouble(futuresBook.bestBid()) << " / " << priceToDouble(futuresBook.bestAsk())
+              << "\n";
 
     // Create strategy with custom threshold
     CashCarryConfig config;
@@ -199,8 +197,7 @@ void demonstrateStrategy() {
         return;
     }
 
-    std::cout << "\nStrategy initialized. State: "
-              << (strategy.isActive() ? "Active" : "Inactive") << "\n";
+    std::cout << "\nStrategy initialized. State: " << (strategy.isActive() ? "Active" : "Inactive") << "\n";
 
     // Simulate a market data tick
     OrderBookUpdate update;
@@ -219,10 +216,8 @@ void demonstrateStrategy() {
     } else {
         std::cout << "\nGenerated " << orders.size() << " orders:\n";
         for (const auto& order : orders) {
-            std::cout << "  Symbol: " << order.symbolId
-                      << ", Side: " << (order.side == Side::Buy ? "BUY" : "SELL")
-                      << ", Price: " << priceToDouble(order.price)
-                      << ", Qty: " << order.quantity << "\n";
+            std::cout << "  Symbol: " << order.symbolId << ", Side: " << (order.side == Side::Buy ? "BUY" : "SELL")
+                      << ", Price: " << priceToDouble(order.price) << ", Qty: " << order.quantity << "\n";
         }
     }
 
@@ -239,10 +234,8 @@ void demonstrateStrategy() {
         std::cout << "\nArbitrage opportunity detected!\n";
         std::cout << "Generated " << orders.size() << " orders:\n";
         for (const auto& order : orders) {
-            std::cout << "  Symbol: " << order.symbolId
-                      << ", Side: " << (order.side == Side::Buy ? "BUY" : "SELL")
-                      << ", Price: $" << priceToDouble(order.price)
-                      << ", Qty: " << order.quantity << "\n";
+            std::cout << "  Symbol: " << order.symbolId << ", Side: " << (order.side == Side::Buy ? "BUY" : "SELL")
+                      << ", Price: $" << priceToDouble(order.price) << ", Qty: " << order.quantity << "\n";
         }
     }
 

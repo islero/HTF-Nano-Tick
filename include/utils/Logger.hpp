@@ -41,15 +41,7 @@ namespace hft {
 /**
  * @brief Log severity levels.
  */
-enum class LogLevel : std::uint8_t {
-    Trace = 0,
-    Debug = 1,
-    Info  = 2,
-    Warn  = 3,
-    Error = 4,
-    Fatal = 5,
-    Off   = 6
-};
+enum class LogLevel : std::uint8_t { Trace = 0, Debug = 1, Info = 2, Warn = 3, Error = 4, Fatal = 5, Off = 6 };
 
 /**
  * @brief Convert log level to string.
@@ -60,11 +52,11 @@ enum class LogLevel : std::uint8_t {
     switch (level) {
         case LogLevel::Trace: return "TRACE";
         case LogLevel::Debug: return "DEBUG";
-        case LogLevel::Info:  return "INFO ";
-        case LogLevel::Warn:  return "WARN ";
+        case LogLevel::Info: return "INFO ";
+        case LogLevel::Warn: return "WARN ";
         case LogLevel::Error: return "ERROR";
         case LogLevel::Fatal: return "FATAL";
-        default:              return "?????";
+        default: return "?????";
     }
 }
 
@@ -81,10 +73,10 @@ enum class LogLevel : std::uint8_t {
 struct alignas(CACHE_LINE_SIZE) LogMessage {
     static constexpr std::size_t MAX_MSG_LEN = 200;
 
-    Timestamp   timestamp; ///< Nanoseconds since epoch
-    LogLevel    level; ///< Severity level
+    Timestamp timestamp; ///< Nanoseconds since epoch
+    LogLevel level; ///< Severity level
     std::uint8_t msgLen; ///< Actual message length
-    char        message[MAX_MSG_LEN]; ///< Message buffer
+    char message[MAX_MSG_LEN]; ///< Message buffer
 
     LogMessage() noexcept = default;
 
@@ -94,10 +86,7 @@ struct alignas(CACHE_LINE_SIZE) LogMessage {
      * @param msg Message string view.
      */
     LogMessage(LogLevel lvl, std::string_view msg) noexcept
-        : timestamp(nowNanos())
-        , level(lvl)
-        , msgLen(static_cast<std::uint8_t>(std::min(msg.size(), MAX_MSG_LEN - 1)))
-    {
+        : timestamp(nowNanos()), level(lvl), msgLen(static_cast<std::uint8_t>(std::min(msg.size(), MAX_MSG_LEN - 1))) {
         std::memcpy(message, msg.data(), msgLen);
         message[msgLen] = '\0';
     }
@@ -116,22 +105,17 @@ struct alignas(CACHE_LINE_SIZE) LogMessage {
  *
  * @tparam QueueCapacity Size of the log message queue (power of two).
  */
-template <std::size_t QueueCapacity = 8192>
-class AsyncLogger {
+template <std::size_t QueueCapacity = 8192> class AsyncLogger {
 public:
-    static_assert((QueueCapacity & (QueueCapacity - 1)) == 0,
-                  "QueueCapacity must be power of two");
+    static_assert((QueueCapacity & (QueueCapacity - 1)) == 0, "QueueCapacity must be power of two");
 
     /**
      * @brief Construct the async logger.
      * @param minLevel Minimum log level to record.
      * @param filename Output file (empty for stdout only).
      */
-    explicit AsyncLogger(LogLevel minLevel = LogLevel::Info,
-                        std::string_view filename = "") noexcept
-        : m_minLevel(minLevel)
-        , m_running(true)
-    {
+    explicit AsyncLogger(LogLevel minLevel = LogLevel::Info, std::string_view filename = "") noexcept
+        : m_minLevel(minLevel), m_running(true) {
         if (!filename.empty()) {
             m_file.open(std::string(filename), std::ios::out | std::ios::app);
         }
@@ -180,18 +164,18 @@ public:
      * Uses snprintf for formatting. For maximum performance in the hot
      * path, prefer log() with pre-formatted strings.
      */
-    template <typename... Args>
-    [[nodiscard]] bool logf(LogLevel level, const char* fmt, Args... args) noexcept {
+    template <typename... Args> [[nodiscard]] bool logf(LogLevel level, const char* fmt, Args... args) noexcept {
         if (level < m_minLevel.load(std::memory_order_relaxed)) [[likely]] {
             return true;
         }
 
         std::array<char, LogMessage::MAX_MSG_LEN> buffer;
         int len = std::snprintf(buffer.data(), buffer.size(), fmt, args...);
-        if (len < 0) [[unlikely]] return false;
+        if (len < 0) [[unlikely]]
+            return false;
 
         return m_queue.tryEmplace(level,
-            std::string_view(buffer.data(), std::min<std::size_t>(len, buffer.size() - 1)));
+                                  std::string_view(buffer.data(), std::min<std::size_t>(len, buffer.size() - 1)));
     }
 
     // Convenience methods
@@ -206,17 +190,13 @@ public:
      * @brief Set minimum log level at runtime.
      * @param level New minimum level.
      */
-    void setLevel(LogLevel level) noexcept {
-        m_minLevel.store(level, std::memory_order_relaxed);
-    }
+    void setLevel(LogLevel level) noexcept { m_minLevel.store(level, std::memory_order_relaxed); }
 
     /**
      * @brief Get current minimum log level.
      * @return Current level.
      */
-    [[nodiscard]] LogLevel level() const noexcept {
-        return m_minLevel.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] LogLevel level() const noexcept { return m_minLevel.load(std::memory_order_relaxed); }
 
     /**
      * @brief Flush all pending messages synchronously.
@@ -238,9 +218,7 @@ public:
      * @brief Get approximate number of pending messages.
      * @return Queue size.
      */
-    [[nodiscard]] std::size_t pendingCount() const noexcept {
-        return m_queue.sizeApprox();
-    }
+    [[nodiscard]] std::size_t pendingCount() const noexcept { return m_queue.sizeApprox(); }
 
 private:
     void writerLoop() noexcept {
@@ -278,14 +256,10 @@ private:
         std::int64_t minutes = (totalSeconds / 60) % 60;
         std::int64_t seconds = totalSeconds % 60;
 
-        int len = std::snprintf(buffer.data(), buffer.size(),
-            "[%02lld:%02lld:%02lld.%09lld] [%s] %s\n",
-            static_cast<long long>(hours),
-            static_cast<long long>(minutes),
-            static_cast<long long>(seconds),
-            static_cast<long long>(nanosRemainder),
-            logLevelToString(msg.level).data(),
-            msg.message);
+        int len = std::snprintf(buffer.data(), buffer.size(), "[%02lld:%02lld:%02lld.%09lld] [%s] %s\n",
+                                static_cast<long long>(hours), static_cast<long long>(minutes),
+                                static_cast<long long>(seconds), static_cast<long long>(nanosRemainder),
+                                logLevelToString(msg.level).data(), msg.message);
 
         if (len > 0) {
             std::string_view line(buffer.data(), static_cast<std::size_t>(len));
@@ -330,8 +304,8 @@ inline DefaultLogger& getLogger() noexcept {
 // Convenience macros for global logger
 #define HFT_LOG_TRACE(msg) ::hft::getLogger().trace(msg)
 #define HFT_LOG_DEBUG(msg) ::hft::getLogger().debug(msg)
-#define HFT_LOG_INFO(msg)  ::hft::getLogger().info(msg)
-#define HFT_LOG_WARN(msg)  ::hft::getLogger().warn(msg)
+#define HFT_LOG_INFO(msg) ::hft::getLogger().info(msg)
+#define HFT_LOG_WARN(msg) ::hft::getLogger().warn(msg)
 #define HFT_LOG_ERROR(msg) ::hft::getLogger().error(msg)
 #define HFT_LOG_FATAL(msg) ::hft::getLogger().fatal(msg)
 

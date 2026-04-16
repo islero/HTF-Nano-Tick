@@ -72,15 +72,15 @@ struct MarketDataConfig {
  * the wire protocol (FIX, binary, etc.).
  */
 struct alignas(CACHE_LINE_SIZE) MarketDataMessage {
-    SymbolId   symbolId; ///< Instrument symbol
-    SeqNum     seqNum; ///< Exchange sequence number
-    Timestamp  sendingTime; ///< Exchange timestamp (SendingTime)
-    Timestamp  receiveTime; ///< Local receive timestamp
-    MdMsgType  msgType; ///< Message type
-    Side       side; ///< Bid/Ask for book updates
-    Price      price; ///< Price
-    Quantity   quantity; ///< Quantity
-    OrderId    orderId; ///< Order ID (for order-level books)
+    SymbolId symbolId; ///< Instrument symbol
+    SeqNum seqNum; ///< Exchange sequence number
+    Timestamp sendingTime; ///< Exchange timestamp (SendingTime)
+    Timestamp receiveTime; ///< Local receive timestamp
+    MdMsgType msgType; ///< Message type
+    Side side; ///< Bid/Ask for book updates
+    Price price; ///< Price
+    Quantity quantity; ///< Quantity
+    OrderId orderId; ///< Order ID (for order-level books)
 
     MarketDataMessage() noexcept = default;
 
@@ -97,9 +97,7 @@ struct alignas(CACHE_LINE_SIZE) MarketDataMessage {
      * @brief Get message latency (wire time).
      * @return Latency in nanoseconds.
      */
-    [[nodiscard]] Timestamp latency() const noexcept {
-        return receiveTime - sendingTime;
-    }
+    [[nodiscard]] Timestamp latency() const noexcept { return receiveTime - sendingTime; }
 };
 
 //==============================================================================
@@ -129,15 +127,13 @@ struct alignas(CACHE_LINE_SIZE) StaleDataStats {
     [[nodiscard]] double staleRatio() const noexcept {
         auto total = totalMessages.load(std::memory_order_relaxed);
         if (total == 0) return 0.0;
-        return static_cast<double>(staleMessages.load(std::memory_order_relaxed)) /
-               static_cast<double>(total);
+        return static_cast<double>(staleMessages.load(std::memory_order_relaxed)) / static_cast<double>(total);
     }
 
     [[nodiscard]] double avgLatencyNanos() const noexcept {
         auto total = totalMessages.load(std::memory_order_relaxed);
         if (total == 0) return 0.0;
-        return static_cast<double>(avgLatencySum.load(std::memory_order_relaxed)) /
-               static_cast<double>(total);
+        return static_cast<double>(avgLatencySum.load(std::memory_order_relaxed)) / static_cast<double>(total);
     }
 };
 
@@ -155,19 +151,15 @@ struct alignas(CACHE_LINE_SIZE) StaleDataStats {
  * @tparam Derived CRTP derived class for callbacks.
  * @tparam QueueCapacity Size of internal message queue.
  */
-template <typename Derived, std::size_t QueueCapacity = 65536>
-class MarketDataHandler {
+template <typename Derived, std::size_t QueueCapacity = 65536> class MarketDataHandler {
 public:
-    static_assert((QueueCapacity & (QueueCapacity - 1)) == 0,
-                  "QueueCapacity must be power of two");
+    static_assert((QueueCapacity & (QueueCapacity - 1)) == 0, "QueueCapacity must be power of two");
 
     /**
      * @brief Construct market data handler.
      * @param config Handler configuration.
      */
-    explicit MarketDataHandler(const MarketDataConfig& config = {}) noexcept
-        : m_config(config)
-    {}
+    explicit MarketDataHandler(const MarketDataConfig& config = {}) noexcept : m_config(config) {}
 
     virtual ~MarketDataHandler() = default;
 
@@ -438,9 +430,7 @@ public:
      * @param msg Pre-parsed market data message.
      * @return true if enqueued, false if queue full.
      */
-    [[nodiscard]] bool enqueue(const MarketDataMessage& msg) noexcept {
-        return m_queue.tryPush(msg);
-    }
+    [[nodiscard]] bool enqueue(const MarketDataMessage& msg) noexcept { return m_queue.tryPush(msg); }
 
     /**
      * @brief Process next message from queue (consumer thread).
@@ -474,52 +464,39 @@ public:
      * @brief Update stale threshold at runtime.
      * @param thresholdNanos New threshold in nanoseconds.
      */
-    void setStaleThreshold(Timestamp thresholdNanos) noexcept {
-        m_config.staleThresholdNanos = thresholdNanos;
-    }
+    void setStaleThreshold(Timestamp thresholdNanos) noexcept { m_config.staleThresholdNanos = thresholdNanos; }
 
     /**
      * @brief Get current stale threshold.
      * @return Threshold in nanoseconds.
      */
-    [[nodiscard]] Timestamp staleThreshold() const noexcept {
-        return m_config.staleThresholdNanos;
-    }
+    [[nodiscard]] Timestamp staleThreshold() const noexcept { return m_config.staleThresholdNanos; }
 
     /**
      * @brief Get stale data statistics.
      * @return Reference to statistics.
      */
-    [[nodiscard]] const StaleDataStats& stats() const noexcept {
-        return m_stats;
-    }
+    [[nodiscard]] const StaleDataStats& stats() const noexcept { return m_stats; }
 
     /**
      * @brief Reset statistics.
      */
-    void resetStats() noexcept {
-        m_stats.reset();
-    }
+    void resetStats() noexcept { m_stats.reset(); }
 
     /**
      * @brief Get queue depth.
      * @return Approximate number of messages in queue.
      */
-    [[nodiscard]] std::size_t queueDepth() const noexcept {
-        return m_queue.sizeApprox();
-    }
+    [[nodiscard]] std::size_t queueDepth() const noexcept { return m_queue.sizeApprox(); }
 
 protected:
     // CRTP interface - default implementations
-    void onStaleMessage([[maybe_unused]] const MarketDataMessage& msg,
-                        [[maybe_unused]] Timestamp latency) noexcept {}
+    void onStaleMessage([[maybe_unused]] const MarketDataMessage& msg, [[maybe_unused]] Timestamp latency) noexcept {}
 
-    void onSequenceGap([[maybe_unused]] SymbolId symbolId,
-                       [[maybe_unused]] SeqNum lastSeq,
+    void onSequenceGap([[maybe_unused]] SymbolId symbolId, [[maybe_unused]] SeqNum lastSeq,
                        [[maybe_unused]] SeqNum newSeq) noexcept {}
 
-    void onLargeSequenceGap([[maybe_unused]] SymbolId symbolId,
-                            [[maybe_unused]] SeqNum lastSeq,
+    void onLargeSequenceGap([[maybe_unused]] SymbolId symbolId, [[maybe_unused]] SeqNum lastSeq,
                             [[maybe_unused]] SeqNum newSeq) noexcept {}
 
 #ifdef HFT_ENABLE_QUICKFIX
@@ -534,8 +511,7 @@ private:
     void updateMaxLatency(Timestamp latency) noexcept {
         Timestamp currentMax = m_stats.maxLatencyNanos.load(std::memory_order_relaxed);
         while (latency > currentMax &&
-               !m_stats.maxLatencyNanos.compare_exchange_weak(currentMax, latency,
-                   std::memory_order_relaxed)) {}
+               !m_stats.maxLatencyNanos.compare_exchange_weak(currentMax, latency, std::memory_order_relaxed)) {}
     }
 
     void checkSequenceGap(SymbolId symbolId, SeqNum seqNum) noexcept {
@@ -589,9 +565,7 @@ public:
      * @param symbolId Symbol identifier.
      * @param book Pointer to order book.
      */
-    void registerOrderBook(SymbolId symbolId, DefaultOrderBook* book) noexcept {
-        m_orderBooks[symbolId] = book;
-    }
+    void registerOrderBook(SymbolId symbolId, DefaultOrderBook* book) noexcept { m_orderBooks[symbolId] = book; }
 
     // CRTP implementations
     void onStaleMessage(const MarketDataMessage& msg, Timestamp latency) noexcept {
@@ -615,20 +589,13 @@ public:
         DefaultOrderBook* book = it->second;
 
         switch (msg.msgType) {
-            case MdMsgType::Add:
-                (void)book->addOrder(msg.orderId, msg.side, msg.price, msg.quantity);
-                break;
+            case MdMsgType::Add: (void)book->addOrder(msg.orderId, msg.side, msg.price, msg.quantity); break;
 
-            case MdMsgType::Modify:
-                (void)book->modifyOrder(msg.orderId, msg.quantity);
-                break;
+            case MdMsgType::Modify: (void)book->modifyOrder(msg.orderId, msg.quantity); break;
 
-            case MdMsgType::Delete:
-                (void)book->deleteOrder(msg.orderId);
-                break;
+            case MdMsgType::Delete: (void)book->deleteOrder(msg.orderId); break;
 
-            default:
-                break;
+            default: break;
         }
     }
 

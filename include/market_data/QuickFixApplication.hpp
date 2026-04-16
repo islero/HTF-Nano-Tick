@@ -44,22 +44,22 @@ namespace hft {
 namespace qfix {
 
 /// FIX 4.4 Side values
-inline constexpr char SIDE_BUY  = '1';
+inline constexpr char SIDE_BUY = '1';
 inline constexpr char SIDE_SELL = '2';
 
 /// MD Entry types
-inline constexpr char MD_ENTRY_BID   = '0';
-inline constexpr char MD_ENTRY_ASK   = '1';
+inline constexpr char MD_ENTRY_BID = '0';
+inline constexpr char MD_ENTRY_ASK = '1';
 inline constexpr char MD_ENTRY_TRADE = '2';
 
 /// MD Update actions
-inline constexpr char MD_ACTION_NEW    = '0';
+inline constexpr char MD_ACTION_NEW = '0';
 inline constexpr char MD_ACTION_CHANGE = '1';
 inline constexpr char MD_ACTION_DELETE = '2';
 
 /// Order types
 inline constexpr char ORD_TYPE_MARKET = '1';
-inline constexpr char ORD_TYPE_LIMIT  = '2';
+inline constexpr char ORD_TYPE_LIMIT = '2';
 
 /// Time in Force
 inline constexpr char TIF_DAY = '0';
@@ -68,12 +68,12 @@ inline constexpr char TIF_IOC = '3';
 inline constexpr char TIF_FOK = '4';
 
 /// Exec types
-inline constexpr char EXEC_TYPE_NEW             = '0';
-inline constexpr char EXEC_TYPE_PARTIAL_FILL    = '1';
-inline constexpr char EXEC_TYPE_FILL            = '2';
-inline constexpr char EXEC_TYPE_CANCELED        = '4';
-inline constexpr char EXEC_TYPE_REPLACED        = '5';
-inline constexpr char EXEC_TYPE_REJECTED        = '8';
+inline constexpr char EXEC_TYPE_NEW = '0';
+inline constexpr char EXEC_TYPE_PARTIAL_FILL = '1';
+inline constexpr char EXEC_TYPE_FILL = '2';
+inline constexpr char EXEC_TYPE_CANCELED = '4';
+inline constexpr char EXEC_TYPE_REPLACED = '5';
+inline constexpr char EXEC_TYPE_REJECTED = '8';
 
 } // namespace qfix
 
@@ -85,12 +85,12 @@ inline constexpr char EXEC_TYPE_REJECTED        = '8';
  * @brief Normalized market data entry extracted from QuickFIX message.
  */
 struct QuickFixMdEntry {
-    char       entryType; ///< '0'=Bid, '1'=Ask, '2'=Trade
-    char       updateAction; ///< '0'=New, '1'=Change, '2'=Delete
-    Price      price; ///< Price
-    Quantity   size; ///< Size
+    char entryType; ///< '0'=Bid, '1'=Ask, '2'=Trade
+    char updateAction; ///< '0'=New, '1'=Change, '2'=Delete
+    Price price; ///< Price
+    Quantity size; ///< Size
     std::string entryId; ///< Entry ID (if provided)
-    Timestamp  receiveTime; ///< Local receive timestamp
+    Timestamp receiveTime; ///< Local receive timestamp
 };
 
 //==============================================================================
@@ -101,16 +101,16 @@ struct QuickFixMdEntry {
  * @brief Normalized execution report extracted from QuickFIX message.
  */
 struct QuickFixExecReport {
-    OrderId     clOrdId; ///< Client order ID
-    OrderId     orderId; ///< Exchange order ID
-    char        execType; ///< Execution type
+    OrderId clOrdId; ///< Client order ID
+    OrderId orderId; ///< Exchange order ID
+    char execType; ///< Execution type
     OrderStatus status; ///< Order status
-    Price       lastPx; ///< Last fill price
-    Quantity    lastQty; ///< Last fill quantity
-    Quantity    cumQty; ///< Cumulative filled quantity
-    Quantity    leavesQty; ///< Remaining quantity
+    Price lastPx; ///< Last fill price
+    Quantity lastQty; ///< Last fill quantity
+    Quantity cumQty; ///< Cumulative filled quantity
+    Quantity leavesQty; ///< Remaining quantity
     std::string text; ///< Reject reason text
-    Timestamp   receiveTime; ///< Local receive timestamp
+    Timestamp receiveTime; ///< Local receive timestamp
 };
 
 //==============================================================================
@@ -173,13 +173,9 @@ public:
         m_sessionId = sessionId;
     }
 
-    void onLogon(const FIX::SessionID& /*sessionId*/) override {
-        m_connected.store(true, std::memory_order_release);
-    }
+    void onLogon(const FIX::SessionID& /*sessionId*/) override { m_connected.store(true, std::memory_order_release); }
 
-    void onLogout(const FIX::SessionID& /*sessionId*/) override {
-        m_connected.store(false, std::memory_order_release);
-    }
+    void onLogout(const FIX::SessionID& /*sessionId*/) override { m_connected.store(false, std::memory_order_release); }
 
     void toAdmin(FIX::Message& /*message*/, const FIX::SessionID& /*sessionId*/) override {
         // Can customize admin messages here (e.g., add password to Logon)
@@ -202,18 +198,15 @@ public:
     // FIX::MessageCracker Handlers
     //==========================================================================
 
-    void onMessage(const FIX44::MarketDataSnapshotFullRefresh& message,
-                   const FIX::SessionID& /*sessionId*/) override {
+    void onMessage(const FIX44::MarketDataSnapshotFullRefresh& message, const FIX::SessionID& /*sessionId*/) override {
         processMarketDataSnapshot(message);
     }
 
-    void onMessage(const FIX44::MarketDataIncrementalRefresh& message,
-                   const FIX::SessionID& /*sessionId*/) override {
+    void onMessage(const FIX44::MarketDataIncrementalRefresh& message, const FIX::SessionID& /*sessionId*/) override {
         processMarketDataIncremental(message);
     }
 
-    void onMessage(const FIX44::ExecutionReport& message,
-                   const FIX::SessionID& /*sessionId*/) override {
+    void onMessage(const FIX44::ExecutionReport& message, const FIX::SessionID& /*sessionId*/) override {
         processExecutionReport(message);
     }
 
@@ -232,8 +225,8 @@ public:
      * @param orderType Order type ('1'=Market, '2'=Limit).
      * @return true if message was sent.
      */
-    bool sendNewOrder(OrderId clOrdId, const std::string& symbol, Side side,
-                      Price price, Quantity quantity, char orderType = qfix::ORD_TYPE_LIMIT) {
+    bool sendNewOrder(OrderId clOrdId, const std::string& symbol, Side side, Price price, Quantity quantity,
+                      char orderType = qfix::ORD_TYPE_LIMIT) {
         if (!m_connected.load(std::memory_order_acquire)) {
             return false;
         }
@@ -265,8 +258,7 @@ public:
      * @param side Side.
      * @return true if message was sent.
      */
-    bool sendCancelOrder(OrderId clOrdId, OrderId origClOrdId,
-                         const std::string& symbol, Side side) {
+    bool sendCancelOrder(OrderId clOrdId, OrderId origClOrdId, const std::string& symbol, Side side) {
         if (!m_connected.load(std::memory_order_acquire)) {
             return false;
         }
@@ -293,9 +285,8 @@ public:
      * @param quantity New quantity.
      * @return true if message was sent.
      */
-    bool sendReplaceOrder(OrderId clOrdId, OrderId origClOrdId,
-                          const std::string& symbol, Side side,
-                          Price price, Quantity quantity) {
+    bool sendReplaceOrder(OrderId clOrdId, OrderId origClOrdId, const std::string& symbol, Side side, Price price,
+                          Quantity quantity) {
         if (!m_connected.load(std::memory_order_acquire)) {
             return false;
         }
@@ -322,8 +313,7 @@ public:
      * @param subscriptionType '1'=Snapshot+Updates, '2'=Unsubscribe.
      * @return true if message was sent.
      */
-    bool subscribeMarketData(const std::string& mdReqId, const std::string& symbol,
-                             char subscriptionType = '1') {
+    bool subscribeMarketData(const std::string& mdReqId, const std::string& symbol, char subscriptionType = '1') {
         if (!m_connected.load(std::memory_order_acquire)) {
             return false;
         }
@@ -361,9 +351,7 @@ public:
      * @param entry Output entry.
      * @return true if entry was popped.
      */
-    [[nodiscard]] bool tryPopMarketData(QuickFixMdEntry& entry) noexcept {
-        return m_mdQueue.tryPop(entry);
-    }
+    [[nodiscard]] bool tryPopMarketData(QuickFixMdEntry& entry) noexcept { return m_mdQueue.tryPop(entry); }
 
     /**
      * @brief Try to pop an execution report from the queue.
@@ -371,51 +359,35 @@ public:
      * @param report Output report.
      * @return true if report was popped.
      */
-    [[nodiscard]] bool tryPopExecutionReport(QuickFixExecReport& report) noexcept {
-        return m_execQueue.tryPop(report);
-    }
+    [[nodiscard]] bool tryPopExecutionReport(QuickFixExecReport& report) noexcept { return m_execQueue.tryPop(report); }
 
     /**
      * @brief Get approximate market data queue depth.
      */
-    [[nodiscard]] std::size_t mdQueueDepth() const noexcept {
-        return m_mdQueue.sizeApprox();
-    }
+    [[nodiscard]] std::size_t mdQueueDepth() const noexcept { return m_mdQueue.sizeApprox(); }
 
     /**
      * @brief Get approximate execution report queue depth.
      */
-    [[nodiscard]] std::size_t execQueueDepth() const noexcept {
-        return m_execQueue.sizeApprox();
-    }
+    [[nodiscard]] std::size_t execQueueDepth() const noexcept { return m_execQueue.sizeApprox(); }
 
     //==========================================================================
     // Callbacks (alternative to queue-based processing)
     //==========================================================================
 
-    void setMarketDataCallback(MarketDataCallback callback) {
-        m_mdCallback = std::move(callback);
-    }
+    void setMarketDataCallback(MarketDataCallback callback) { m_mdCallback = std::move(callback); }
 
-    void setExecutionCallback(ExecutionCallback callback) {
-        m_execCallback = std::move(callback);
-    }
+    void setExecutionCallback(ExecutionCallback callback) { m_execCallback = std::move(callback); }
 
     //==========================================================================
     // Status
     //==========================================================================
 
-    [[nodiscard]] bool isConnected() const noexcept {
-        return m_connected.load(std::memory_order_acquire);
-    }
+    [[nodiscard]] bool isConnected() const noexcept { return m_connected.load(std::memory_order_acquire); }
 
-    [[nodiscard]] const QuickFixStats& stats() const noexcept {
-        return m_stats;
-    }
+    [[nodiscard]] const QuickFixStats& stats() const noexcept { return m_stats; }
 
-    void resetStats() noexcept {
-        m_stats.reset();
-    }
+    void resetStats() noexcept { m_stats.reset(); }
 
 private:
     void processMarketDataSnapshot(const FIX44::MarketDataSnapshotFullRefresh& message) {
@@ -533,24 +505,12 @@ private:
 
         // Map exec type to order status
         switch (report.execType) {
-            case qfix::EXEC_TYPE_NEW:
-                report.status = OrderStatus::New;
-                break;
-            case qfix::EXEC_TYPE_PARTIAL_FILL:
-                report.status = OrderStatus::PartiallyFilled;
-                break;
-            case qfix::EXEC_TYPE_FILL:
-                report.status = OrderStatus::Filled;
-                break;
-            case qfix::EXEC_TYPE_CANCELED:
-                report.status = OrderStatus::Canceled;
-                break;
-            case qfix::EXEC_TYPE_REJECTED:
-                report.status = OrderStatus::Rejected;
-                break;
-            default:
-                report.status = OrderStatus::New;
-                break;
+            case qfix::EXEC_TYPE_NEW: report.status = OrderStatus::New; break;
+            case qfix::EXEC_TYPE_PARTIAL_FILL: report.status = OrderStatus::PartiallyFilled; break;
+            case qfix::EXEC_TYPE_FILL: report.status = OrderStatus::Filled; break;
+            case qfix::EXEC_TYPE_CANCELED: report.status = OrderStatus::Canceled; break;
+            case qfix::EXEC_TYPE_REJECTED: report.status = OrderStatus::Rejected; break;
+            default: report.status = OrderStatus::New; break;
         }
 
         FIX::LastPx lastPx;

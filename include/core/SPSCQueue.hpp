@@ -30,7 +30,7 @@
 #include <thread>
 
 #if defined(__x86_64__) || defined(_M_X64)
-    #include <immintrin.h>
+#include <immintrin.h>
 #endif
 
 namespace hft {
@@ -54,13 +54,11 @@ namespace hft {
  * @tparam T The element type (must be movable or copyable).
  * @tparam Capacity Queue capacity (must be power of two).
  */
-template <typename T, std::size_t Capacity>
-class alignas(CACHE_LINE_SIZE) SPSCQueue {
+template <typename T, std::size_t Capacity> class alignas(CACHE_LINE_SIZE) SPSCQueue {
 public:
     static_assert(Capacity > 0, "Capacity must be greater than 0");
     static_assert((Capacity & (Capacity - 1)) == 0, "Capacity must be power of two");
-    static_assert(std::is_nothrow_move_constructible_v<T> ||
-                  std::is_nothrow_copy_constructible_v<T>,
+    static_assert(std::is_nothrow_move_constructible_v<T> || std::is_nothrow_copy_constructible_v<T>,
                   "T must be nothrow move or copy constructible");
 
     /// Mask for fast modulo (Capacity - 1)
@@ -92,8 +90,7 @@ public:
      * @param value The value to push.
      * @return true if successfully pushed, false if queue is full.
      */
-    template <typename U>
-    [[nodiscard]] bool tryPush(U&& value) noexcept {
+    template <typename U> [[nodiscard]] bool tryPush(U&& value) noexcept {
         static_assert(std::is_convertible_v<U, T>, "U must be convertible to T");
 
         const std::size_t tail = m_tail.load(std::memory_order_relaxed);
@@ -121,8 +118,7 @@ public:
      * @return true if successfully emplaced, false if queue is full.
      */
     template <typename... Args>
-    [[nodiscard]] bool tryEmplace(Args&&... args) noexcept(
-        std::is_nothrow_constructible_v<T, Args...>) {
+    [[nodiscard]] bool tryEmplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
         const std::size_t tail = m_tail.load(std::memory_order_relaxed);
         const std::size_t nextTail = (tail + 1) & INDEX_MASK;
 
@@ -202,8 +198,7 @@ public:
      * @note This is a snapshot; the state may change immediately after.
      */
     [[nodiscard]] bool empty() const noexcept {
-        return m_head.load(std::memory_order_acquire) ==
-               m_tail.load(std::memory_order_acquire);
+        return m_head.load(std::memory_order_acquire) == m_tail.load(std::memory_order_acquire);
     }
 
     /**
@@ -283,8 +278,7 @@ public:
      * @tparam U Forwarding reference type.
      * @param value Value to push.
      */
-    template <typename U>
-    void push(U&& value) noexcept {
+    template <typename U> void push(U&& value) noexcept {
         std::size_t spins = 0;
         while (!Base::tryPush(std::forward<U>(value))) {
             spinWait(spins);
@@ -297,8 +291,7 @@ public:
      * @tparam Args Constructor argument types.
      * @param args Arguments forwarded to constructor.
      */
-    template <typename... Args>
-    void emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
+    template <typename... Args> void emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
         std::size_t spins = 0;
         while (!Base::tryEmplace(std::forward<Args>(args)...)) {
             spinWait(spins);

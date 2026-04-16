@@ -13,9 +13,7 @@ using namespace hft;
 
 class OrderBookTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        book = std::make_unique<DefaultOrderBook>(1);
-    }
+    void SetUp() override { book = std::make_unique<DefaultOrderBook>(1); }
 
     std::unique_ptr<DefaultOrderBook> book;
 };
@@ -115,9 +113,7 @@ TEST_F(OrderBookTest, ModifyOrderReduceQuantity) {
     EXPECT_EQ(book->bestBidQty(), 250); // 50 + 200
 }
 
-TEST_F(OrderBookTest, ModifyNonExistentOrderFails) {
-    EXPECT_FALSE(book->modifyOrder(999, 100));
-}
+TEST_F(OrderBookTest, ModifyNonExistentOrderFails) { EXPECT_FALSE(book->modifyOrder(999, 100)); }
 
 TEST_F(OrderBookTest, ModifyToZeroDeletesOrder) {
     (void)book->addOrder(1, Side::Buy, priceFromDouble(100.50), 100);
@@ -149,9 +145,7 @@ TEST_F(OrderBookTest, DeleteOrderUpdatesBBO) {
     EXPECT_EQ(book->bestBidQty(), 200);
 }
 
-TEST_F(OrderBookTest, DeleteNonExistentOrderFails) {
-    EXPECT_FALSE(book->deleteOrder(999));
-}
+TEST_F(OrderBookTest, DeleteNonExistentOrderFails) { EXPECT_FALSE(book->deleteOrder(999)); }
 
 TEST_F(OrderBookTest, DeleteFromMultipleOrdersAtSamePrice) {
     Price price = priceFromDouble(100.50);

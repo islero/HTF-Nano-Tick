@@ -75,9 +75,7 @@ TEST_F(SPSCQueueTest, FrontElement) {
     EXPECT_EQ(*front, 42);
 }
 
-TEST_F(SPSCQueueTest, FrontOnEmptyQueueReturnsNull) {
-    EXPECT_EQ(queue.front(), nullptr);
-}
+TEST_F(SPSCQueueTest, FrontOnEmptyQueueReturnsNull) { EXPECT_EQ(queue.front(), nullptr); }
 
 //==============================================================================
 // Capacity Tests
@@ -155,9 +153,7 @@ struct MoveOnlyType {
     MoveOnlyType(int v) : value(v) {}
     MoveOnlyType(const MoveOnlyType&) = delete;
     MoveOnlyType& operator=(const MoveOnlyType&) = delete;
-    MoveOnlyType(MoveOnlyType&& other) noexcept : value(other.value), moved(false) {
-        other.moved = true;
-    }
+    MoveOnlyType(MoveOnlyType&& other) noexcept : value(other.value), moved(false) { other.moved = true; }
     MoveOnlyType& operator=(MoveOnlyType&& other) noexcept {
         value = other.value;
         other.moved = true;
